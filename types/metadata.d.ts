@@ -1,4 +1,4 @@
-import { Network } from './networks';
+import { Network, NetworkId } from './networks';
 export interface Issuer {
     name?: string;
     url?: string;
@@ -33,6 +33,7 @@ export interface MetadataFields {
 }
 export declare class Metadata {
     static fromJSON(json: string): Metadata;
+    static fetch(colorId: string, networkId: NetworkId, baseUrl?: string): Promise<Metadata>;
     private static validate;
     readonly version: string;
     readonly name: string;

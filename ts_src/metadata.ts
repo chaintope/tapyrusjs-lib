@@ -1,5 +1,5 @@
 import * as crypto from './crypto';
-import { Network } from './networks';
+import { Network, NetworkId } from './networks';
 import * as payments from './payments';
 const canonicalize = require('canonicalize');
 const ecc = require('tiny-secp256k1');
@@ -86,10 +86,29 @@ function getDataUriSize(value: string): number {
   return value.length;
 }
 
+const DEFAULT_REGISTRY_URL =
+  'https://chaintope.github.io/tapyrus-token-registry';
+
 export class Metadata {
   static fromJSON(json: string): Metadata {
     const fields = JSON.parse(json) as MetadataFields;
     return new Metadata(fields);
+  }
+
+  static async fetch(
+    colorId: string,
+    networkId: NetworkId,
+    baseUrl: string = DEFAULT_REGISTRY_URL,
+  ): Promise<Metadata> {
+    const url = `${baseUrl}/tokens/${networkId}/${colorId}.json`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch metadata: ${response.status} ${response.statusText}`,
+      );
+    }
+    const json = await response.text();
+    return Metadata.fromJSON(json);
   }
 
   private static validate(fields: MetadataFields): void {

@@ -1,4 +1,37 @@
 'use strict';
+var __awaiter =
+  (this && this.__awaiter) ||
+  function(thisArg, _arguments, P, generator) {
+    function adopt(value) {
+      return value instanceof P
+        ? value
+        : new P(function(resolve) {
+            resolve(value);
+          });
+    }
+    return new (P || (P = Promise))(function(resolve, reject) {
+      function fulfilled(value) {
+        try {
+          step(generator.next(value));
+        } catch (e) {
+          reject(e);
+        }
+      }
+      function rejected(value) {
+        try {
+          step(generator['throw'](value));
+        } catch (e) {
+          reject(e);
+        }
+      }
+      function step(result) {
+        result.done
+          ? resolve(result.value)
+          : adopt(result.value).then(fulfilled, rejected);
+      }
+      step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+  };
 Object.defineProperty(exports, '__esModule', { value: true });
 exports.Metadata = void 0;
 const crypto = require('./crypto');
@@ -39,10 +72,29 @@ function getDataUriSize(value) {
   }
   return value.length;
 }
+const DEFAULT_REGISTRY_URL =
+  'https://chaintope.github.io/tapyrus-token-registry';
 class Metadata {
   static fromJSON(json) {
     const fields = JSON.parse(json);
     return new Metadata(fields);
+  }
+  static fetch(colorId_1, networkId_1) {
+    return __awaiter(this, arguments, void 0, function*(
+      colorId,
+      networkId,
+      baseUrl = DEFAULT_REGISTRY_URL,
+    ) {
+      const url = `${baseUrl}/tokens/${networkId}/${colorId}.json`;
+      const response = yield fetch(url);
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch metadata: ${response.status} ${response.statusText}`,
+        );
+      }
+      const json = yield response.text();
+      return Metadata.fromJSON(json);
+    });
   }
   static validate(fields) {
     // version

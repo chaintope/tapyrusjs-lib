@@ -1,6 +1,6 @@
 import * as assert from 'assert';
-import { describe, it } from 'mocha';
-import { ECPair, Metadata } from '..';
+import { describe, it, afterEach } from 'mocha';
+import { ECPair, Metadata, NetworkId } from '..';
 import * as fixtures from './fixtures/tip0020_metadata.json';
 
 // Helper to determine tokenType based on test case
@@ -411,6 +411,110 @@ describe('Metadata', () => {
       assert.strictEqual(metadata.animation_url, 'https://example.com/video.mp4');
       assert.strictEqual(metadata.external_url, 'https://example.com/nft/123');
       assert.deepStrictEqual(metadata.attributes, [{ trait_type: 'Color', value: 'Blue' }]);
+    });
+  });
+
+  describe('fetch', () => {
+    const originalFetch = global.fetch;
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    const validJson = JSON.stringify({
+      version: '1.0',
+      name: 'Test Token',
+      symbol: 'TEST',
+      tokenType: 'reissuable',
+      decimals: 8,
+    });
+
+    const colorId = 'c1a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
+
+    it('fetches metadata from registry', async () => {
+      global.fetch = (async (url: string) => {
+        assert.strictEqual(
+          url,
+          `https://chaintope.github.io/tapyrus-token-registry/tokens/${NetworkId.TAPYRUS_API}/${colorId}.json`,
+        );
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          text: async () => validJson,
+        };
+      }) as any;
+
+      const metadata = await Metadata.fetch(colorId, NetworkId.TAPYRUS_API);
+      assert.strictEqual(metadata.name, 'Test Token');
+      assert.strictEqual(metadata.symbol, 'TEST');
+      assert.strictEqual(metadata.tokenType, 'reissuable');
+      assert.strictEqual(metadata.decimals, 8);
+    });
+
+    it('uses custom baseUrl', async () => {
+      const customBase = 'https://custom.example.com/registry';
+      global.fetch = (async (url: string) => {
+        assert.strictEqual(
+          url,
+          `${customBase}/tokens/${NetworkId.TESTNET}/${colorId}.json`,
+        );
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          text: async () => validJson,
+        };
+      }) as any;
+
+      const metadata = await Metadata.fetch(
+        colorId,
+        NetworkId.TESTNET,
+        customBase,
+      );
+      assert.strictEqual(metadata.name, 'Test Token');
+    });
+
+    it('throws on HTTP error', async () => {
+      global.fetch = (async () => {
+        return {
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+          text: async () => 'Not Found',
+        };
+      }) as any;
+
+      await assert.rejects(
+        () => Metadata.fetch(colorId, NetworkId.TAPYRUS_API),
+        /Failed to fetch metadata: 404 Not Found/,
+      );
+    });
+
+    it('throws on network error', async () => {
+      global.fetch = (async () => {
+        throw new Error('Network error');
+      }) as any;
+
+      await assert.rejects(
+        () => Metadata.fetch(colorId, NetworkId.TAPYRUS_API),
+        /Network error/,
+      );
+    });
+
+    it('throws on invalid JSON response', async () => {
+      global.fetch = (async () => {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          text: async () => 'not json',
+        };
+      }) as any;
+
+      await assert.rejects(
+        () => Metadata.fetch(colorId, NetworkId.TAPYRUS_API),
+      );
     });
   });
 });
