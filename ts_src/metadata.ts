@@ -57,6 +57,12 @@ const COLOR_ID_NFT = 0xc3;
 
 const VALID_TOKEN_TYPES: TokenType[] = ['reissuable', 'non_reissuable', 'nft'];
 
+const COLOR_ID_TYPE_MAP: Record<number, TokenType> = {
+  [COLOR_ID_REISSUABLE]: 'reissuable',
+  [COLOR_ID_NON_REISSUABLE]: 'non_reissuable',
+  [COLOR_ID_NFT]: 'nft',
+};
+
 function isHttpsUrl(value: string): boolean {
   try {
     const url = new URL(value);
@@ -108,7 +114,16 @@ export class Metadata {
       );
     }
     const json = await response.text();
-    return Metadata.fromJSON(json);
+    const fields = JSON.parse(json) as MetadataFields;
+    if (!fields.tokenType) {
+      const prefix = parseInt(colorId.substring(0, 2), 16);
+      const tokenType = COLOR_ID_TYPE_MAP[prefix];
+      if (!tokenType) {
+        throw new Error(`Unknown color id prefix: ${colorId.substring(0, 2)}`);
+      }
+      fields.tokenType = tokenType;
+    }
+    return new Metadata(fields);
   }
 
   private static validate(fields: MetadataFields): void {

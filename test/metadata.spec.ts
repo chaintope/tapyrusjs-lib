@@ -516,5 +516,40 @@ describe('Metadata', () => {
         () => Metadata.fetch(colorId, NetworkId.TAPYRUS_API),
       );
     });
+
+    it('infers tokenType from colorId prefix', async () => {
+      const registryJson = JSON.stringify({
+        version: '1.0',
+        name: 'Tapyrus Simple Token',
+        symbol: 'TST',
+        icon: 'https://www.chaintope.com/wp-content/themes/chaintope20250603/_asset/img/products/tapyrus/tapyrus__icon01.png',
+      });
+      const registryColorId =
+        'c1a1f1f07fc9526cb3e9610117359d2e8e0468089dba599822759f7ddd92efeaa8';
+      global.fetch = (async (url: string) => {
+        assert.strictEqual(
+          url,
+          `https://chaintope.github.io/tapyrus-token-registry/tokens/${NetworkId.TESTNET}/${registryColorId}.json`,
+        );
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          text: async () => registryJson,
+        };
+      }) as any;
+
+      const metadata = await Metadata.fetch(
+        registryColorId,
+        NetworkId.TESTNET,
+      );
+      assert.strictEqual(metadata.name, 'Tapyrus Simple Token');
+      assert.strictEqual(metadata.symbol, 'TST');
+      assert.strictEqual(metadata.tokenType, 'reissuable');
+      assert.strictEqual(
+        metadata.icon,
+        'https://www.chaintope.com/wp-content/themes/chaintope20250603/_asset/img/products/tapyrus/tapyrus__icon01.png',
+      );
+    });
   });
 });
