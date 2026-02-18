@@ -25,6 +25,12 @@ export interface OutPoint {
   index: number;
 }
 
+export interface RegistryEntry {
+  metadata: Metadata;
+  paymentBase: Buffer;
+  outPoint?: OutPoint;
+}
+
 export interface MetadataFields {
   version: string;
   name: string;
@@ -105,7 +111,7 @@ export class Metadata {
     colorId: string,
     networkId: NetworkId,
     baseUrl: string = DEFAULT_REGISTRY_URL,
-  ): Promise<Metadata> {
+  ): Promise<RegistryEntry> {
     const url = `${baseUrl}/tokens/${networkId}/${colorId}.json`;
     const response = await fetch(url);
     if (!response.ok) {
@@ -114,16 +120,27 @@ export class Metadata {
       );
     }
     const json = await response.text();
-    const fields = JSON.parse(json) as MetadataFields;
-    if (!fields.tokenType) {
+    const data = JSON.parse(json);
+    const metadataFields = data.metadata as MetadataFields;
+    if (!metadataFields.tokenType) {
       const prefix = parseInt(colorId.substring(0, 2), 16);
       const tokenType = COLOR_ID_TYPE_MAP[prefix];
       if (!tokenType) {
         throw new Error(`Unknown color id prefix: ${colorId.substring(0, 2)}`);
       }
-      fields.tokenType = tokenType;
+      metadataFields.tokenType = tokenType;
     }
-    return new Metadata(fields);
+    const entry: RegistryEntry = {
+      metadata: new Metadata(metadataFields),
+      paymentBase: Buffer.from(data.payment_base, 'hex'),
+    };
+    if (data.outpoint) {
+      entry.outPoint = {
+        txid: Buffer.from(data.outpoint.txid, 'hex'),
+        index: data.outpoint.index,
+      };
+    }
+    return entry;
   }
 
   private static validate(fields: MetadataFields): void {

@@ -421,12 +421,17 @@ describe('Metadata', () => {
       global.fetch = originalFetch;
     });
 
+    const paymentBase = '0362ebb65b7cb6cd2973c11a2eb017766d0ba7c9d961fc00e75fda102f2a23c8aa';
+
     const validJson = JSON.stringify({
-      version: '1.0',
-      name: 'Test Token',
-      symbol: 'TEST',
-      tokenType: 'reissuable',
-      decimals: 8,
+      payment_base: paymentBase,
+      metadata: {
+        version: '1.0',
+        name: 'Test Token',
+        symbol: 'TEST',
+        tokenType: 'reissuable',
+        decimals: 8,
+      },
     });
 
     const colorId = 'c1a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
@@ -445,11 +450,13 @@ describe('Metadata', () => {
         };
       }) as any;
 
-      const metadata = await Metadata.fetch(colorId, NetworkId.TAPYRUS_API);
-      assert.strictEqual(metadata.name, 'Test Token');
-      assert.strictEqual(metadata.symbol, 'TEST');
-      assert.strictEqual(metadata.tokenType, 'reissuable');
-      assert.strictEqual(metadata.decimals, 8);
+      const entry = await Metadata.fetch(colorId, NetworkId.TAPYRUS_API);
+      assert.strictEqual(entry.metadata.name, 'Test Token');
+      assert.strictEqual(entry.metadata.symbol, 'TEST');
+      assert.strictEqual(entry.metadata.tokenType, 'reissuable');
+      assert.strictEqual(entry.metadata.decimals, 8);
+      assert.deepStrictEqual(entry.paymentBase, Buffer.from(paymentBase, 'hex'));
+      assert.strictEqual(entry.outPoint, undefined);
     });
 
     it('uses custom baseUrl', async () => {
@@ -467,12 +474,12 @@ describe('Metadata', () => {
         };
       }) as any;
 
-      const metadata = await Metadata.fetch(
+      const entry = await Metadata.fetch(
         colorId,
         NetworkId.TESTNET,
         customBase,
       );
-      assert.strictEqual(metadata.name, 'Test Token');
+      assert.strictEqual(entry.metadata.name, 'Test Token');
     });
 
     it('throws on HTTP error', async () => {
@@ -517,15 +524,18 @@ describe('Metadata', () => {
       );
     });
 
-    it('infers tokenType from colorId prefix', async () => {
-      const registryJson = JSON.stringify({
-        version: '1.0',
-        name: 'Tapyrus Simple Token',
-        symbol: 'TST',
-        icon: 'https://www.chaintope.com/wp-content/themes/chaintope20250603/_asset/img/products/tapyrus/tapyrus__icon01.png',
-      });
+    it('infers tokenType from colorId prefix (reissuable)', async () => {
       const registryColorId =
         'c1a1f1f07fc9526cb3e9610117359d2e8e0468089dba599822759f7ddd92efeaa8';
+      const registryJson = JSON.stringify({
+        payment_base: paymentBase,
+        metadata: {
+          version: '1.0',
+          name: 'Tapyrus Simple Token',
+          symbol: 'TST',
+          icon: 'https://www.chaintope.com/wp-content/themes/chaintope20250603/_asset/img/products/tapyrus/tapyrus__icon01.png',
+        },
+      });
       global.fetch = (async (url: string) => {
         assert.strictEqual(
           url,
@@ -539,17 +549,68 @@ describe('Metadata', () => {
         };
       }) as any;
 
-      const metadata = await Metadata.fetch(
+      const entry = await Metadata.fetch(
         registryColorId,
         NetworkId.TESTNET,
       );
-      assert.strictEqual(metadata.name, 'Tapyrus Simple Token');
-      assert.strictEqual(metadata.symbol, 'TST');
-      assert.strictEqual(metadata.tokenType, 'reissuable');
+      assert.strictEqual(entry.metadata.name, 'Tapyrus Simple Token');
+      assert.strictEqual(entry.metadata.symbol, 'TST');
+      assert.strictEqual(entry.metadata.tokenType, 'reissuable');
       assert.strictEqual(
-        metadata.icon,
+        entry.metadata.icon,
         'https://www.chaintope.com/wp-content/themes/chaintope20250603/_asset/img/products/tapyrus/tapyrus__icon01.png',
       );
+      assert.deepStrictEqual(entry.paymentBase, Buffer.from(paymentBase, 'hex'));
+      assert.strictEqual(entry.outPoint, undefined);
+    });
+
+    it('parses outPoint for nft entry', async () => {
+      const nftColorId =
+        'c3e26287c1d29662bc0b16665737a5e54cbe55aed1cd75d37c00820887f9e0d7eb';
+      const nftPaymentBase = '03587b18c41aa7dda894beadf6cf482f8ec6457f672ab28c1bee18096f6ee2901c';
+      const txid = 'f408f358c2aeb0ba0f29d2e6974607e28b4d259fd8fa540fb32e507812a4c07c';
+      const nftJson = JSON.stringify({
+        payment_base: nftPaymentBase,
+        outpoint: {
+          txid,
+          index: 0,
+        },
+        metadata: {
+          version: '1.0',
+          name: 'CT token',
+          symbol: 'CTT',
+          decimals: 0,
+          description: '\u30c6\u30b9\u30c8\u7528NFT',
+          icon: 'https://www.chaintope.com/wp-content/themes/chaintope20250603/_asset/img/company/popup_kataoka.jpg.webp',
+          website: 'https://www.chaintope.com/',
+          issuer: {
+            name: '\u682a\u5f0f\u4f1a\u793echaintope',
+            url: 'https://www.chaintope.com/',
+          },
+          image: 'https://www.chaintope.com/wp-content/themes/chaintope20250603/_asset/img/top/company_pic01.jpg.webp',
+        },
+      });
+      global.fetch = (async () => {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          text: async () => nftJson,
+        };
+      }) as any;
+
+      const entry = await Metadata.fetch(nftColorId, NetworkId.TESTNET);
+      assert.strictEqual(entry.metadata.name, 'CT token');
+      assert.strictEqual(entry.metadata.symbol, 'CTT');
+      assert.strictEqual(entry.metadata.tokenType, 'nft');
+      assert.strictEqual(
+        entry.metadata.image,
+        'https://www.chaintope.com/wp-content/themes/chaintope20250603/_asset/img/top/company_pic01.jpg.webp',
+      );
+      assert.deepStrictEqual(entry.paymentBase, Buffer.from(nftPaymentBase, 'hex'));
+      assert.ok(entry.outPoint);
+      assert.deepStrictEqual(entry.outPoint!.txid, Buffer.from(txid, 'hex'));
+      assert.strictEqual(entry.outPoint!.index, 0);
     });
   });
 });

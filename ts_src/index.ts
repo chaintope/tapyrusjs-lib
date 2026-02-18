@@ -30,6 +30,7 @@ export {
   MetadataFields,
   TokenType,
   OutPoint,
+  RegistryEntry,
 } from './metadata';
 export { Psbt, PsbtTxInput, PsbtTxOutput } from './psbt';
 export { OPS as opcodes } from './script';

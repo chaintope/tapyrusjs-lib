@@ -98,8 +98,9 @@ class Metadata {
         );
       }
       const json = yield response.text();
-      const fields = JSON.parse(json);
-      if (!fields.tokenType) {
+      const data = JSON.parse(json);
+      const metadataFields = data.metadata;
+      if (!metadataFields.tokenType) {
         const prefix = parseInt(colorId.substring(0, 2), 16);
         const tokenType = COLOR_ID_TYPE_MAP[prefix];
         if (!tokenType) {
@@ -107,9 +108,19 @@ class Metadata {
             `Unknown color id prefix: ${colorId.substring(0, 2)}`,
           );
         }
-        fields.tokenType = tokenType;
+        metadataFields.tokenType = tokenType;
       }
-      return new Metadata(fields);
+      const entry = {
+        metadata: new Metadata(metadataFields),
+        paymentBase: Buffer.from(data.payment_base, 'hex'),
+      };
+      if (data.outpoint) {
+        entry.outPoint = {
+          txid: Buffer.from(data.outpoint.txid, 'hex'),
+          index: data.outpoint.index,
+        };
+      }
+      return entry;
     });
   }
   static validate(fields) {

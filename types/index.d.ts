@@ -9,7 +9,7 @@ import * as script from './script';
 declare const bip32: import("bip32").BIP32API;
 export { BIP32Interface, ECPair, address, bip32, bufferutils, crypto, networks, payments, script, };
 export { Block } from './block';
-export { Metadata, Issuer, Attribute, MetadataFields, TokenType, OutPoint, } from './metadata';
+export { Metadata, Issuer, Attribute, MetadataFields, TokenType, OutPoint, RegistryEntry, } from './metadata';
 export { Psbt, PsbtTxInput, PsbtTxOutput } from './psbt';
 export { OPS as opcodes } from './script';
 export { Transaction } from './transaction';

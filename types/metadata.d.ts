@@ -14,6 +14,11 @@ export interface OutPoint {
     txid: Buffer;
     index: number;
 }
+export interface RegistryEntry {
+    metadata: Metadata;
+    paymentBase: Buffer;
+    outPoint?: OutPoint;
+}
 export interface MetadataFields {
     version: string;
     name: string;
@@ -33,7 +38,7 @@ export interface MetadataFields {
 }
 export declare class Metadata {
     static fromJSON(json: string): Metadata;
-    static fetch(colorId: string, networkId: NetworkId, baseUrl?: string): Promise<Metadata>;
+    static fetch(colorId: string, networkId: NetworkId, baseUrl?: string): Promise<RegistryEntry>;
     private static validate;
     readonly version: string;
     readonly name: string;
