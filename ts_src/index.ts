@@ -6,6 +6,7 @@ import * as crypto from './crypto';
 import * as ECPair from './ecpair';
 import * as networks from './networks';
 import * as payments from './payments';
+import * as schnorr from './schnorr';
 import * as script from './script';
 
 const bip32 = BIP32Factory(ecc);
@@ -19,6 +20,7 @@ export {
   crypto,
   networks,
   payments,
+  schnorr,
   script,
 };
 
@@ -33,6 +35,37 @@ export {
   RegistryEntry,
 } from './metadata';
 export { Psbt, PsbtTxInput, PsbtTxOutput } from './psbt';
+export {
+  Bip32Derivation,
+  FinalizeContext,
+  GlobalXpub,
+  PartialSig,
+  PreimageMap,
+  Pstt,
+  PsttData,
+  PsttGlobal,
+  PsttGlobalUpdate,
+  PsttInput,
+  PsttInputAdd,
+  PsttInputUpdate,
+  PsttOptsOptional,
+  PsttOutput,
+  PsttOutputAdd,
+  PsttOutputUpdate,
+  PsttRecord,
+  PsttSigner,
+  registerScriptSigBuilder,
+  resolveLocktime,
+  ScriptSigBuilder,
+  SignatureScheme,
+  TxModifiable,
+  unregisterScriptSigBuilder,
+} from './pstt';
+export {
+  GlobalTypes as PsttGlobalTypes,
+  InputTypes as PsttInputTypes,
+  OutputTypes as PsttOutputTypes,
+} from './pstt/fields';
 export { OPS as opcodes } from './script';
 export { Transaction } from './transaction';
 export { TransactionBuilder } from './transaction_builder';
