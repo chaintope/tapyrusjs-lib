@@ -972,6 +972,33 @@ describe('Pstt', () => {
       }
     });
 
+    it('rejects PSTT_GLOBAL_TX_MODIFIABLE with a reserved bit set', () => {
+      // TIP-0174, Transaction Modifiable Flags: only bits 0-2 are defined and
+      // "the remaining bits are reserved and must be set to 0".
+      const parse = (value: number): Pstt =>
+        Pstt.fromBuffer(
+          encode({
+            global: globalRecords([
+              {
+                type: GlobalTypes.TX_MODIFIABLE,
+                keydata: EMPTY,
+                value: Buffer.from([value]),
+              },
+            ]),
+            inputs: [],
+            outputs: [],
+          }),
+        );
+
+      for (const value of [0x08, 0x80, 0xff]) {
+        assert.throws(() => parse(value), /reserves at 0/);
+      }
+      // Every combination of the defined bits stays acceptable.
+      for (let value = 0; value <= 0b111; value++) {
+        assert.strictEqual(parse(value).global.txModifiable, value);
+      }
+    });
+
     it('rejects an output amount that is not 8 bytes', () => {
       assert.throws(
         () =>
@@ -1377,6 +1404,32 @@ describe('Pstt', () => {
         .finishConstruction();
       assert.strictEqual(pstt.global.txModifiable, 0);
       assert.strictEqual(pstt.isOutputsModifiable(), false);
+    });
+
+    it('refuses to set a reserved bit of PSTT_GLOBAL_TX_MODIFIABLE', () => {
+      const pstt = spendable();
+      const before = pstt.global.txModifiable;
+      // 0x100 does not fit in the single byte the field holds, so it would be
+      // truncated to 0 on serialization rather than stored.
+      for (const value of [0x08, 0x80, 0xff, 0x100]) {
+        assert.throws(
+          () => pstt.updateGlobal({ txModifiable: value }),
+          /reserves at 0/,
+        );
+      }
+      assert.strictEqual(pstt.global.txModifiable, before);
+      // The defined bits are still settable through the same path.
+      pstt.updateGlobal({ txModifiable: 0b111 });
+      assert.strictEqual(pstt.global.txModifiable, 0b111);
+    });
+
+    it('refuses to touch a flag while a reserved bit is set', () => {
+      const pstt = spendable();
+      // `data` is public, so a caller can reach the field without going
+      // through the parser or updateGlobal; the flag setters catch it next.
+      pstt.global.txModifiable = 0b1000;
+      assert.throws(() => pstt.setInputsModifiable(false), /reserves at 0/);
+      assert.throws(() => pstt.setOutputsModifiable(true), /reserves at 0/);
     });
 
     it('reports a missing input or output', () => {

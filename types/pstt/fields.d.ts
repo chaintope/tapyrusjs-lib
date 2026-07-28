@@ -44,6 +44,17 @@ export declare enum TxModifiable {
     HAS_SIGHASH_SINGLE = 4
 }
 /**
+ * The bits PSTT_GLOBAL_TX_MODIFIABLE defines. TIP-0174 reserves the remaining
+ * bits of the byte and requires them to be 0.
+ */
+export declare const TX_MODIFIABLE_MASK: number;
+/**
+ * Whether a value may be stored in PSTT_GLOBAL_TX_MODIFIABLE. Values that do
+ * not fit in the single byte the field holds fail here as well, since their
+ * excess bits are reserved bits like any other.
+ */
+export declare function isValidTxModifiable(value: number): boolean;
+/**
  * The global unsigned transaction of BIP-174. TIP-0174 has no counterpart, so
  * the type value is reserved and a PSTT carrying it must be rejected.
  */

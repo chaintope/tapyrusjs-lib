@@ -5,7 +5,8 @@
 // the same type value, so these constants line up with the PSBT ones except for
 // the fields that Tapyrus does not have.
 Object.defineProperty(exports, '__esModule', { value: true });
-exports.PUBKEY_LENGTHS = exports.LOCKTIME_THRESHOLD = exports.EMPTY_KEYDATA_OUTPUT_TYPES = exports.EMPTY_KEYDATA_INPUT_TYPES = exports.EMPTY_KEYDATA_GLOBAL_TYPES = exports.RESERVED_OUTPUT_TYPES = exports.RESERVED_INPUT_TYPES = exports.RESERVED_GLOBAL_TYPES = exports.TxModifiable = exports.OutputTypes = exports.InputTypes = exports.GlobalTypes = exports.PSTT_VERSION = exports.MAGIC = void 0;
+exports.PUBKEY_LENGTHS = exports.LOCKTIME_THRESHOLD = exports.EMPTY_KEYDATA_OUTPUT_TYPES = exports.EMPTY_KEYDATA_INPUT_TYPES = exports.EMPTY_KEYDATA_GLOBAL_TYPES = exports.RESERVED_OUTPUT_TYPES = exports.RESERVED_INPUT_TYPES = exports.RESERVED_GLOBAL_TYPES = exports.TX_MODIFIABLE_MASK = exports.TxModifiable = exports.OutputTypes = exports.InputTypes = exports.GlobalTypes = exports.PSTT_VERSION = exports.MAGIC = void 0;
+exports.isValidTxModifiable = isValidTxModifiable;
 exports.isValidPubkeyLength = isValidPubkeyLength;
 exports.isValidSighashType = isValidSighashType;
 const transaction_1 = require('../transaction');
@@ -60,6 +61,20 @@ var TxModifiable;
   TxModifiable[(TxModifiable['OUTPUTS'] = 2)] = 'OUTPUTS';
   TxModifiable[(TxModifiable['HAS_SIGHASH_SINGLE'] = 4)] = 'HAS_SIGHASH_SINGLE';
 })(TxModifiable || (exports.TxModifiable = TxModifiable = {}));
+/**
+ * The bits PSTT_GLOBAL_TX_MODIFIABLE defines. TIP-0174 reserves the remaining
+ * bits of the byte and requires them to be 0.
+ */
+exports.TX_MODIFIABLE_MASK =
+  TxModifiable.INPUTS | TxModifiable.OUTPUTS | TxModifiable.HAS_SIGHASH_SINGLE;
+/**
+ * Whether a value may be stored in PSTT_GLOBAL_TX_MODIFIABLE. Values that do
+ * not fit in the single byte the field holds fail here as well, since their
+ * excess bits are reserved bits like any other.
+ */
+function isValidTxModifiable(value) {
+  return (value & ~exports.TX_MODIFIABLE_MASK) === 0;
+}
 /**
  * The global unsigned transaction of BIP-174. TIP-0174 has no counterpart, so
  * the type value is reserved and a PSTT carrying it must be rejected.

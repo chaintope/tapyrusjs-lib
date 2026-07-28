@@ -12,6 +12,7 @@ import {
   InputTypes,
   isValidPubkeyLength,
   isValidSighashType,
+  isValidTxModifiable,
   LOCKTIME_THRESHOLD,
   OutputTypes,
   PSTT_VERSION,
@@ -341,8 +342,14 @@ function globalFromRecords(records: PsttRecord[]): PsttGlobal {
   if (!featuresRecord) throw new Error('Missing PSTT_GLOBAL_TX_FEATURES');
 
   const txModifiableRecord = find(records, GlobalTypes.TX_MODIFIABLE);
-  if (txModifiableRecord && txModifiableRecord.value.length !== 1)
-    throw new Error('PSTT_GLOBAL_TX_MODIFIABLE must be a 1-byte value');
+  if (txModifiableRecord) {
+    if (txModifiableRecord.value.length !== 1)
+      throw new Error('PSTT_GLOBAL_TX_MODIFIABLE must be a 1-byte value');
+    if (!isValidTxModifiable(txModifiableRecord.value[0]))
+      throw new Error(
+        'PSTT_GLOBAL_TX_MODIFIABLE must leave the bits TIP-0174 reserves at 0',
+      );
+  }
 
   const xpub = filter(records, GlobalTypes.XPUB).map(record => {
     if (record.keydata.length !== XPUB_LENGTH)

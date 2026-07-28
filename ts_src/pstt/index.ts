@@ -18,6 +18,7 @@ import { fromRaw, PsttData, toRaw } from './converter';
 import {
   isValidPubkeyLength,
   isValidSighashType,
+  isValidTxModifiable,
   MAGIC,
   TxModifiable,
 } from './fields';
@@ -165,6 +166,19 @@ function combineModifiable(
   const a = mine || 0;
   const b = theirs || 0;
   return (a & b & permissive) | ((a | b) & ~permissive);
+}
+
+/**
+ * TIP-0174 reserves every bit of PSTT_GLOBAL_TX_MODIFIABLE above Has
+ * SIGHASH_SINGLE and requires it to be 0, so a value carrying one describes a
+ * modification rule this format does not define. Serializing it would also
+ * truncate it, since the field is a single byte.
+ */
+function checkTxModifiableValue(value: number | undefined): void {
+  if (value !== undefined && !isValidTxModifiable(value))
+    throw new Error(
+      'PSTT_GLOBAL_TX_MODIFIABLE must leave the bits TIP-0174 reserves at 0',
+    );
 }
 
 /**
@@ -378,8 +392,10 @@ export class Pstt {
         'Changing the fallback locktime',
         updated.fallbackLocktime,
       );
-    if (updated.txModifiable !== this.data.global.txModifiable)
+    if (updated.txModifiable !== this.data.global.txModifiable) {
+      checkTxModifiableValue(updated.txModifiable);
       this.checkModifiableTightens(updated.txModifiable);
+    }
 
     Object.assign(this.data.global, updated);
     return this;
@@ -970,6 +986,10 @@ export class Pstt {
     // to clear a flag.
     if (current === undefined && !set) return this;
     const next = set ? (current || 0) | flag : (current || 0) & ~flag;
+    // `flag` is a defined bit, so `next` can only carry a reserved one that
+    // `current` already had — which reaching this far means came from a
+    // hand-built `PsttData` rather than from a parsed or updated PSTT.
+    checkTxModifiableValue(next);
     this.checkModifiableTightens(next);
     this.data.global.txModifiable = next;
     return this;

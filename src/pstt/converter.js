@@ -243,8 +243,14 @@ function globalFromRecords(records) {
   const featuresRecord = find(records, fields_1.GlobalTypes.TX_FEATURES);
   if (!featuresRecord) throw new Error('Missing PSTT_GLOBAL_TX_FEATURES');
   const txModifiableRecord = find(records, fields_1.GlobalTypes.TX_MODIFIABLE);
-  if (txModifiableRecord && txModifiableRecord.value.length !== 1)
-    throw new Error('PSTT_GLOBAL_TX_MODIFIABLE must be a 1-byte value');
+  if (txModifiableRecord) {
+    if (txModifiableRecord.value.length !== 1)
+      throw new Error('PSTT_GLOBAL_TX_MODIFIABLE must be a 1-byte value');
+    if (!(0, fields_1.isValidTxModifiable)(txModifiableRecord.value[0]))
+      throw new Error(
+        'PSTT_GLOBAL_TX_MODIFIABLE must leave the bits TIP-0174 reserves at 0',
+      );
+  }
   const xpub = filter(records, fields_1.GlobalTypes.XPUB).map(record => {
     if (record.keydata.length !== XPUB_LENGTH)
       throw new Error(

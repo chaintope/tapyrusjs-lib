@@ -138,6 +138,18 @@ function combineModifiable(mine, theirs) {
   return (a & b & permissive) | ((a | b) & ~permissive);
 }
 /**
+ * TIP-0174 reserves every bit of PSTT_GLOBAL_TX_MODIFIABLE above Has
+ * SIGHASH_SINGLE and requires it to be 0, so a value carrying one describes a
+ * modification rule this format does not define. Serializing it would also
+ * truncate it, since the field is a single byte.
+ */
+function checkTxModifiableValue(value) {
+  if (value !== undefined && !(0, fields_1.isValidTxModifiable)(value))
+    throw new Error(
+      'PSTT_GLOBAL_TX_MODIFIABLE must leave the bits TIP-0174 reserves at 0',
+    );
+}
+/**
  * Whether a script can be satisfied with a signature by this public key: the
  * key behind the hash of a P2PKH or CP2PKH script, or a key that appears in
  * the script itself, as in P2PK and multisig.
@@ -317,8 +329,10 @@ class Pstt {
         'Changing the fallback locktime',
         updated.fallbackLocktime,
       );
-    if (updated.txModifiable !== this.data.global.txModifiable)
+    if (updated.txModifiable !== this.data.global.txModifiable) {
+      checkTxModifiableValue(updated.txModifiable);
       this.checkModifiableTightens(updated.txModifiable);
+    }
     Object.assign(this.data.global, updated);
     return this;
   }
@@ -856,6 +870,10 @@ class Pstt {
     // to clear a flag.
     if (current === undefined && !set) return this;
     const next = set ? (current || 0) | flag : (current || 0) & ~flag;
+    // `flag` is a defined bit, so `next` can only carry a reserved one that
+    // `current` already had — which reaching this far means came from a
+    // hand-built `PsttData` rather than from a parsed or updated PSTT.
+    checkTxModifiableValue(next);
     this.checkModifiableTightens(next);
     this.data.global.txModifiable = next;
     return this;
