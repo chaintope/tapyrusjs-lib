@@ -1494,6 +1494,72 @@ describe('Pstt', () => {
       assert.ok(pstt.extractTransaction().ins[0].script.length > 0);
     });
 
+    it('finalizes a multisig input around a signature that does not verify', () => {
+      // 2-of-3, so that one bad record still leaves enough good ones. The
+      // builder walks the public keys of the script in order, so corrupting
+      // the first one is what would displace a signature the input needs.
+      const redeem = bscript.compile([
+        opcodes.OP_2,
+        keyPair(2).publicKey,
+        keyPair(3).publicKey,
+        keyPair(4).publicKey,
+        opcodes.OP_3,
+        opcodes.OP_CHECKMULTISIG,
+      ]);
+      const p2sh = payments.p2sh({
+        redeem: { output: redeem },
+        network: NETWORKS.dev,
+      }).output!;
+      const funding = fundingTx(0xd0, 100000, p2sh);
+      const pstt = new Pstt({ network: NETWORKS.dev })
+        .addInput({
+          previousTxid: internalTxid(funding),
+          outputIndex: 0,
+          utxo: funding.toBuffer(),
+          redeemScript: redeem,
+        })
+        .addOutput({ amount: 99000, script: p2pkhScript(1) })
+        .finishConstruction();
+
+      pstt.signInput(0, keyPair(2));
+      pstt.signInput(0, keyPair(3));
+      pstt.signInput(0, keyPair(4));
+
+      const tampered = Buffer.from(pstt.inputs[0].partialSig[0].signature);
+      tampered[10] ^= 0xff;
+      pstt.inputs[0].partialSig[0].signature = tampered;
+      assert.ok(
+        pstt.inputs[0].partialSig[0].pubkey.equals(keyPair(2).publicKey),
+      );
+      assert.strictEqual(pstt.validateSignaturesOfInput(0), false);
+
+      const good = pstt.inputs[0].partialSig.slice(1).map(sig => sig.signature);
+      pstt.finalizeInput(0);
+
+      const chunks = bscript.decompile(pstt.inputs[0].finalScriptSig!)!;
+      assert.strictEqual(chunks[0], opcodes.OP_0);
+      assert.strictEqual(chunks.length, 4);
+      assert.ok((chunks[1] as Buffer).equals(good[0]));
+      assert.ok((chunks[2] as Buffer).equals(good[1]));
+      assert.ok((chunks[3] as Buffer).equals(redeem));
+    });
+
+    it('refuses to finalize when too few signatures verify', () => {
+      const pstt = spendable();
+      pstt.signInput(0, keyPair(0));
+      const tampered = Buffer.from(pstt.inputs[0].partialSig[0].signature);
+      tampered[10] ^= 0xff;
+      pstt.inputs[0].partialSig[0].signature = tampered;
+
+      // The record is still there, so a finalizer that trusted it would build
+      // a scriptSig that fails at validation.
+      assert.strictEqual(pstt.inputs[0].partialSig.length, 1);
+      assert.throws(
+        () => pstt.finalizeInput(0),
+        /needs exactly one signature to finalize, found 0/,
+      );
+    });
+
     it('finalizes a P2PK input', () => {
       const p2pk = payments.p2pk({
         pubkey: keyPair(0).publicKey,
@@ -1593,6 +1659,41 @@ describe('Pstt', () => {
 
       assert.strictEqual(pstt.inputs[0].partialSig.length, 1);
       assert.ok(Pstt.fromBuffer(pstt.toBuffer()));
+    });
+
+    it('refuses to change the requested sighash type of a signed input', () => {
+      const pstt = spendable();
+      // Before a signature exists the Updater owns the field outright.
+      pstt.updateInput(0, { sighashType: Transaction.SIGHASH_ALL });
+
+      pstt.signInput(0, keyPair(0));
+      assert.throws(
+        () => pstt.updateInput(0, { sighashType: Transaction.SIGHASH_NONE }),
+        /commit to the sighash type it requests/,
+      );
+      // Setting it to the value it already has is not a change.
+      pstt.updateInput(0, { sighashType: Transaction.SIGHASH_ALL });
+      assert.strictEqual(pstt.inputs[0].sighashType, Transaction.SIGHASH_ALL);
+
+      pstt.finalizeInput(0);
+      assert.throws(
+        () => pstt.updateInput(0, { sighashType: Transaction.SIGHASH_NONE }),
+        /commit to the sighash type it requests/,
+      );
+    });
+
+    it('refuses to validate a signature that contradicts the requested sighash type', () => {
+      const pstt = spendable();
+      pstt.signInput(0, keyPair(0), { sighashType: Transaction.SIGHASH_NONE });
+
+      // A PSTT can arrive with the two records already disagreeing, which
+      // addPartialSig and updateInput both refuse to produce. The signature
+      // verifies, but against a different transaction than the input asks for.
+      pstt.inputs[0].sighashType = Transaction.SIGHASH_ALL;
+      assert.throws(
+        () => pstt.validateSignaturesOfInput(0),
+        /requests sighash type 1 but carries a signature made with 2/,
+      );
     });
 
     it('refuses a signature that ignores the requested sighash type', () => {
@@ -1773,6 +1874,28 @@ describe('Pstt', () => {
         { scheme: 'schnorr' },
       );
       assert.strictEqual(pstt.validateSignaturesOfInput(0), true);
+    });
+
+    it('rejects a Schnorr signer that returns the wrong number of bytes', () => {
+      const inner = keyPair(0);
+      // 65 bytes here would land in PSTT_IN_PARTIAL_SIG as 66 and 63 as 64,
+      // and the length is what selects the scheme, so either would produce a
+      // record read back as ECDSA.
+      for (const length of [63, 65]) {
+        assert.throws(
+          () =>
+            spendable().signInput(
+              0,
+              {
+                publicKey: inner.publicKey,
+                sign: (hash: Buffer): Buffer => inner.sign(hash),
+                signSchnorr: (): Buffer => Buffer.alloc(length),
+              },
+              { scheme: 'schnorr' },
+            ),
+          /must return 64 bytes/,
+        );
+      }
     });
 
     it('rejects a Schnorr request from a signer that can not produce one', () => {

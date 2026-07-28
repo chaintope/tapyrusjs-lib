@@ -172,6 +172,18 @@ export declare class Pstt {
      */
     private checkCanChangeSequence;
     /**
+     * TIP-0174 requires every signature of an input to use the sighash type
+     * PSTT_IN_SIGHASH_TYPE requests, so an Updater that changes the request once
+     * the input holds a signature leaves the input contradicting itself — and
+     * `addPartialSig`, which enforces the same rule from the Signer's side, would
+     * then reject the very signatures already recorded.
+     *
+     * A finalized input counts as signed: its signatures moved into
+     * PSTT_IN_FINAL_SCRIPTSIG, and the Input Finalizer removed the record this
+     * would recreate.
+     */
+    private checkCanChangeSighashType;
+    /**
      * TIP-0174 lets a Combiner resolve a conflicting record by keeping either
      * value, and `mergeRecords` keeps this copy's. PSTT_IN_SEQUENCE is the one
      * record where that silently destroys information: the identification txid is

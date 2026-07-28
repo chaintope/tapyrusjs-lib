@@ -68,7 +68,8 @@ export {
 } from './finalizer';
 export { resolveLocktime };
 
-const SCHNORR_SIGNATURE_LENGTH = 65; // 64-byte signature + 1-byte sighash type
+const SCHNORR_RAW_SIGNATURE_LENGTH = 64; // Rx(32) || s(32)
+const SCHNORR_SIGNATURE_LENGTH = SCHNORR_RAW_SIGNATURE_LENGTH + 1; // + sighash type
 const DEFAULT_FEATURES = 1;
 
 export type SignatureScheme = 'ecdsa' | 'schnorr';
@@ -179,6 +180,40 @@ function checkTxModifiableValue(value: number | undefined): void {
     throw new Error(
       'PSTT_GLOBAL_TX_MODIFIABLE must leave the bits TIP-0174 reserves at 0',
     );
+}
+
+/**
+ * Whether a PSTT_IN_PARTIAL_SIG record verifies against the transaction, under
+ * the scheme its length selects and the sighash type its last byte names.
+ *
+ * A record that is not a signature at all — malformed DER, a public key that is
+ * not a point — is not valid, so the decoders are allowed to fail here rather
+ * than to raise. Nothing about the sighash type is judged: the callers have
+ * already decided which types they accept.
+ */
+function verifyPartialSig(
+  tx: Transaction,
+  inputIndex: number,
+  scriptCode: Buffer,
+  sig: PartialSig,
+): boolean {
+  try {
+    const hash = tx.hashForSignature(
+      inputIndex,
+      scriptCode,
+      sighashTypeOf(sig.signature),
+    );
+    if (signatureScheme(sig.signature) === 'schnorr')
+      return schnorr.verify(
+        sig.pubkey,
+        hash,
+        sig.signature.subarray(0, SCHNORR_RAW_SIGNATURE_LENGTH),
+      );
+    const decoded = bscript.signature.decode(sig.signature);
+    return ecPairFromPublicKey(sig.pubkey).verify(hash, decoded.signature);
+  } catch (e) {
+    return false;
+  }
 }
 
 /**
@@ -412,6 +447,8 @@ export class Pstt {
 
     if (updated.sequence !== input.sequence)
       this.checkCanChangeSequence(inputIndex);
+    if (updated.sighashType !== input.sighashType)
+      this.checkCanChangeSighashType(inputIndex);
     if (
       updated.requiredTimeLocktime !== input.requiredTimeLocktime ||
       updated.requiredHeightLocktime !== input.requiredHeightLocktime
@@ -653,8 +690,20 @@ export class Pstt {
     // commits to nothing, so it must never be reported as valid. Checked before
     // anything is derived from the UTXO, because the sighash type is wrong
     // whether or not the rest of the input is complete.
-    for (const sig of sigs)
-      this.checkSighashType(inputIndex, sighashTypeOf(sig.signature));
+    //
+    // A signature made with a sighash type other than the one the input
+    // requests is refused for the same reason: `addPartialSig` never records
+    // one, so meeting it here means the PSTT arrived contradicting itself and
+    // the record covers a different transaction than the input asks for.
+    for (const sig of sigs) {
+      const sighashType = sighashTypeOf(sig.signature);
+      this.checkSighashType(inputIndex, sighashType);
+      if (input.sighashType !== undefined && sighashType !== input.sighashType)
+        throw new Error(
+          `Input #${inputIndex} requests sighash type ${input.sighashType} ` +
+            `but carries a signature made with ${sighashType}`,
+        );
+    }
 
     const scriptCode = this.getScriptCode(inputIndex);
 
@@ -672,18 +721,7 @@ export class Pstt {
 
     const tx = this.getTransaction();
 
-    return sigs.every(sig => {
-      const sighashType = sighashTypeOf(sig.signature);
-      const hash = tx.hashForSignature(inputIndex, scriptCode, sighashType);
-      if (signatureScheme(sig.signature) === 'schnorr')
-        return schnorr.verify(
-          sig.pubkey,
-          hash,
-          sig.signature.subarray(0, SCHNORR_SIGNATURE_LENGTH - 1),
-        );
-      const decoded = bscript.signature.decode(sig.signature);
-      return ecPairFromPublicKey(sig.pubkey).verify(hash, decoded.signature);
-    });
+    return sigs.every(sig => verifyPartialSig(tx, inputIndex, scriptCode, sig));
   }
 
   // --- Combiner ---
@@ -811,11 +849,22 @@ export class Pstt {
           `${scriptType}`,
       );
 
-    const stack = builder({
-      inputIndex,
-      script: meaningful,
-      partialSig: input.partialSig,
-    });
+    // TIP-0174 has the Input Finalizer check that "the collected records are
+    // sufficient to satisfy the script", and a record that does not verify is
+    // not. Handing the builders only the signatures that do makes the check
+    // theirs to complete: each already refuses to build when too few are left.
+    //
+    // The multisig builder is why this matters. It takes the first m public
+    // keys of the script that carry a record, so one bad signature among m+1
+    // otherwise good ones would displace a good one and yield a scriptSig that
+    // fails at validation, with the signatures needed to spend the output
+    // sitting unused in the same input.
+    const tx = this.getTransaction();
+    const partialSig = input.partialSig.filter(sig =>
+      verifyPartialSig(tx, inputIndex, meaningful, sig),
+    );
+
+    const stack = builder({ inputIndex, script: meaningful, partialSig });
     if (isP2SH) stack.push(meaningful);
     return bscript.compile(stack);
   }
@@ -906,6 +955,26 @@ export class Pstt {
           );
       }
     }
+  }
+
+  /**
+   * TIP-0174 requires every signature of an input to use the sighash type
+   * PSTT_IN_SIGHASH_TYPE requests, so an Updater that changes the request once
+   * the input holds a signature leaves the input contradicting itself — and
+   * `addPartialSig`, which enforces the same rule from the Signer's side, would
+   * then reject the very signatures already recorded.
+   *
+   * A finalized input counts as signed: its signatures moved into
+   * PSTT_IN_FINAL_SCRIPTSIG, and the Input Finalizer removed the record this
+   * would recreate.
+   */
+  private checkCanChangeSighashType(inputIndex: number): void {
+    const input = this.data.inputs[inputIndex];
+    if (input.partialSig.length > 0 || input.finalScriptSig)
+      throw new Error(
+        `Input #${inputIndex} is signed: its signatures commit to the sighash ` +
+          `type it requests`,
+      );
   }
 
   /**
@@ -1056,9 +1125,21 @@ export class Pstt {
 }
 
 function signSchnorrWith(keyPair: PsttSigner, hash: Buffer): Buffer {
-  if (keyPair.signSchnorr) return keyPair.signSchnorr(hash);
-  if (keyPair.privateKey) return schnorr.sign(keyPair.privateKey, hash);
-  throw new Error('This signer can not produce Schnorr signatures');
+  let signature: Buffer;
+  if (keyPair.signSchnorr) signature = keyPair.signSchnorr(hash);
+  else if (keyPair.privateKey)
+    signature = schnorr.sign(keyPair.privateKey, hash);
+  else throw new Error('This signer can not produce Schnorr signatures');
+
+  // The scheme of a PSTT_IN_PARTIAL_SIG value is decided by its length alone,
+  // so a signer returning any other size would silently produce a record that
+  // the script interpreter — and `signatureScheme` — read as ECDSA.
+  if (signature.length !== SCHNORR_RAW_SIGNATURE_LENGTH)
+    throw new Error(
+      `A Schnorr signer must return ${SCHNORR_RAW_SIGNATURE_LENGTH} bytes, ` +
+        `got ${signature.length}`,
+    );
+  return signature;
 }
 
 /**
