@@ -1,10 +1,12 @@
 // Schnorr signature scheme used by the Tapyrus script interpreter.
 //
-// This is NOT BIP340. It follows the tapyrus-core reference implementation
-// (test/functional/test_framework/schnorr.py, src/pubkey.cpp):
+// This is NOT BIP340. It follows the implementation tapyrus-core actually signs
+// with, secp256k1_schnorr_sign of the bundled libsecp256k1 fork
+// (chaintope/secp256k1, src/modules/schnorr/main_impl.h):
 //
-//   - the nonce is derived with RFC 6979 (HMAC-DRBG over SHA256), using the
-//     additional data algo16 = "Schnorr + SHA256" (exactly 16 ASCII bytes),
+//   - the nonce is derived with RFC 6979 (HMAC-DRBG over SHA256) over
+//     key32 || msg32 || algo16, with algo16 = "SCHNORR + SHA256" (exactly 16
+//     ASCII bytes),
 //   - the sign of the nonce is flipped so that the y coordinate of R is a
 //     quadratic residue modulo p (Jacobi symbol 1),
 //   - the challenge is e = SHA256(Rx(32) || compressed pubkey(33) || msg(32)) mod n,
@@ -38,8 +40,8 @@ const GY = BigInt(
   '0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8',
 );
 
-// "Schnorr + SHA256" is exactly 16 ASCII bytes, so no padding is needed.
-const ALGO16 = Buffer.from('Schnorr + SHA256', 'ascii');
+// "SCHNORR + SHA256" is exactly 16 ASCII bytes, so no padding is needed.
+const ALGO16 = Buffer.from('SCHNORR + SHA256', 'ascii');
 
 // null represents the point at infinity.
 type Point = { x: bigint; y: bigint } | null;
