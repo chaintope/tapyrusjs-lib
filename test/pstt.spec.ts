@@ -646,6 +646,24 @@ describe('Pstt', () => {
       );
     });
 
+    it('applies nothing when a later PSTT is refused', () => {
+      const other = validFixtures.find(s => s.id === 'p2pkh-ecdsa')!;
+      const mine = Pstt.fromBase64(stage('signed-a'));
+      const before = mine.toBuffer();
+
+      // The first PSTT combines cleanly, the second does not. Rolling the
+      // first one back keeps the caller from holding a half-combined PSTT.
+      assert.throws(
+        () =>
+          mine.combine(
+            Pstt.fromBase64(stage('signed-b')),
+            Pstt.fromBase64(other.stages[0].pstt),
+          ),
+        /different identifiers/,
+      );
+      assert.deepStrictEqual(mine.toBuffer(), before);
+    });
+
     const signedWithSequence = (marker: number, sequence?: number): Pstt => {
       const funding = fundingTx(marker, 100000, p2pkhScript(0));
       const pstt = new Pstt({ network: NETWORKS.dev })

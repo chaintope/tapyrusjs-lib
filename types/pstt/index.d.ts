@@ -138,6 +138,13 @@ export declare class Pstt {
     inputHasPubkey(inputIndex: number, pubkey: Buffer): boolean;
     validateSignaturesOfAllInputs(): boolean;
     validateSignaturesOfInput(inputIndex: number, pubkey?: Buffer): boolean;
+    /**
+     * Combine other PSTTs into this one.
+     *
+     * All or nothing: the PSTTs are combined one after another, but if any of
+     * them is rejected the ones already applied are rolled back, so a caller
+     * that catches the error still holds the PSTT it had before the call.
+     */
     combine(...others: Pstt[]): this;
     /**
      * Finalize every input that is not finalized yet.

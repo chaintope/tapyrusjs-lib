@@ -626,27 +626,40 @@ class Pstt {
     return sigs.every(sig => verifyPartialSig(tx, inputIndex, scriptCode, sig));
   }
   // --- Combiner ---
+  /**
+   * Combine other PSTTs into this one.
+   *
+   * All or nothing: the PSTTs are combined one after another, but if any of
+   * them is rejected the ones already applied are rolled back, so a caller
+   * that catches the error still holds the PSTT it had before the call.
+   */
   combine(...others) {
-    for (const other of others) {
-      if (other.getId() !== this.getId())
-        throw new Error('Can not combine PSTTs with different identifiers');
-      this.checkSequencesAgree(other);
-      const mine = (0, converter_1.toRaw)(this.data);
-      const theirs = (0, converter_1.toRaw)(other.data);
-      const merged = (0, converter_1.fromRaw)({
-        global: mergeRecords(mine.global, theirs.global),
-        inputs: mine.inputs.map((records, i) =>
-          mergeRecords(records, theirs.inputs[i]),
-        ),
-        outputs: mine.outputs.map((records, i) =>
-          mergeRecords(records, theirs.outputs[i]),
-        ),
-      });
-      merged.global.txModifiable = combineModifiable(
-        this.data.global.txModifiable,
-        other.data.global.txModifiable,
-      );
-      this.data = merged;
+    const original = this.data;
+    try {
+      for (const other of others) {
+        if (other.getId() !== this.getId())
+          throw new Error('Can not combine PSTTs with different identifiers');
+        this.checkSequencesAgree(other);
+        const mine = (0, converter_1.toRaw)(this.data);
+        const theirs = (0, converter_1.toRaw)(other.data);
+        const merged = (0, converter_1.fromRaw)({
+          global: mergeRecords(mine.global, theirs.global),
+          inputs: mine.inputs.map((records, i) =>
+            mergeRecords(records, theirs.inputs[i]),
+          ),
+          outputs: mine.outputs.map((records, i) =>
+            mergeRecords(records, theirs.outputs[i]),
+          ),
+        });
+        merged.global.txModifiable = combineModifiable(
+          this.data.global.txModifiable,
+          other.data.global.txModifiable,
+        );
+        this.data = merged;
+      }
+    } catch (e) {
+      this.data = original;
+      throw e;
     }
     return this;
   }
