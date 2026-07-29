@@ -1,6 +1,6 @@
 'use strict';
 Object.defineProperty(exports, '__esModule', { value: true });
-exports.NetworkId = exports.TransactionBuilder = exports.Transaction = exports.opcodes = exports.Psbt = exports.Metadata = exports.Block = exports.script = exports.payments = exports.networks = exports.crypto = exports.bufferutils = exports.bip32 = exports.address = exports.ECPair = void 0;
+exports.NetworkId = exports.TransactionBuilder = exports.Transaction = exports.opcodes = exports.PsttOutputTypes = exports.PsttInputTypes = exports.PsttGlobalTypes = exports.unregisterScriptSigBuilder = exports.TxModifiable = exports.resolveLocktime = exports.registerScriptSigBuilder = exports.Pstt = exports.Psbt = exports.Metadata = exports.Block = exports.script = exports.schnorr = exports.payments = exports.networks = exports.crypto = exports.bufferutils = exports.bip32 = exports.address = exports.ECPair = void 0;
 const bip32_1 = require('bip32');
 const ecc = require('tiny-secp256k1');
 const address = require('./address');
@@ -15,6 +15,8 @@ const networks = require('./networks');
 exports.networks = networks;
 const payments = require('./payments');
 exports.payments = payments;
+const schnorr = require('./schnorr');
+exports.schnorr = schnorr;
 const script = require('./script');
 exports.script = script;
 const bip32 = (0, bip32_1.BIP32Factory)(ecc);
@@ -38,6 +40,56 @@ Object.defineProperty(exports, 'Psbt', {
   enumerable: true,
   get: function() {
     return psbt_1.Psbt;
+  },
+});
+var pstt_1 = require('./pstt');
+Object.defineProperty(exports, 'Pstt', {
+  enumerable: true,
+  get: function() {
+    return pstt_1.Pstt;
+  },
+});
+Object.defineProperty(exports, 'registerScriptSigBuilder', {
+  enumerable: true,
+  get: function() {
+    return pstt_1.registerScriptSigBuilder;
+  },
+});
+Object.defineProperty(exports, 'resolveLocktime', {
+  enumerable: true,
+  get: function() {
+    return pstt_1.resolveLocktime;
+  },
+});
+Object.defineProperty(exports, 'TxModifiable', {
+  enumerable: true,
+  get: function() {
+    return pstt_1.TxModifiable;
+  },
+});
+Object.defineProperty(exports, 'unregisterScriptSigBuilder', {
+  enumerable: true,
+  get: function() {
+    return pstt_1.unregisterScriptSigBuilder;
+  },
+});
+var fields_1 = require('./pstt/fields');
+Object.defineProperty(exports, 'PsttGlobalTypes', {
+  enumerable: true,
+  get: function() {
+    return fields_1.GlobalTypes;
+  },
+});
+Object.defineProperty(exports, 'PsttInputTypes', {
+  enumerable: true,
+  get: function() {
+    return fields_1.InputTypes;
+  },
+});
+Object.defineProperty(exports, 'PsttOutputTypes', {
+  enumerable: true,
+  get: function() {
+    return fields_1.OutputTypes;
   },
 });
 var script_1 = require('./script');
