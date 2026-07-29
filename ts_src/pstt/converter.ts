@@ -146,7 +146,13 @@ function encodeDerivationPath(masterFingerprint: Buffer, path: string): Buffer {
   masterFingerprint.copy(buffer, 0);
   elements.slice(1).forEach((element, i) => {
     const hardened = element.endsWith("'") || element.endsWith('h');
-    const index = parseInt(hardened ? element.slice(0, -1) : element, 10);
+    // `parseInt` stops at the first character that is not a digit and returns
+    // what it read so far, so an element such as `12abc'` would be accepted as
+    // `12'`. The element has to be nothing but digits to describe an index.
+    const digits = hardened ? element.slice(0, -1) : element;
+    if (!/^\d+$/.test(digits))
+      throw new Error(`Invalid derivation path ${path}`);
+    const index = parseInt(digits, 10);
     if (!(index >= 0 && index < HIGHEST_BIT))
       throw new Error(`Invalid derivation path ${path}`);
     buffer.writeUInt32LE(

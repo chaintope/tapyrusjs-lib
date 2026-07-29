@@ -923,6 +923,20 @@ describe('Pstt', () => {
         () => encodeDerivationPath(fingerprint, 'm/abc'),
         /Invalid derivation path/,
       );
+      // An element that only starts with digits describes no index, so it is
+      // rejected instead of being read as the digits it starts with.
+      assert.throws(
+        () => encodeDerivationPath(fingerprint, "m/12abc'"),
+        /Invalid derivation path/,
+      );
+      assert.throws(
+        () => encodeDerivationPath(fingerprint, 'm/12abc'),
+        /Invalid derivation path/,
+      );
+      assert.throws(
+        () => encodeDerivationPath(fingerprint, "m/'"),
+        /Invalid derivation path/,
+      );
       assert.throws(
         () => decodeDerivationPath(Buffer.alloc(6), 'test'),
         /fingerprint followed by 32-bit indexes/,
