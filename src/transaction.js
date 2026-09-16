@@ -206,10 +206,19 @@ class Transaction {
   getHash() {
     return bcrypto.hash256(this.__toBuffer());
   }
+  /**
+   * The hash an outpoint refers to. Tapyrus serializes the transaction without
+   * the scriptSig of each input for this hash, so that a change to a scriptSig
+   * does not change the identity of the transaction.
+   */
+  getMalFixHash() {
+    return bcrypto.hash256(this.__toBuffer(undefined, undefined, true));
+  }
   getId() {
     // transaction hash's are displayed in reverse order
-    const buffer = bcrypto.hash256(this.__toBuffer(undefined, undefined, true));
-    return (0, bufferutils_1.reverseBuffer)(buffer).toString('hex');
+    return (0, bufferutils_1.reverseBuffer)(this.getMalFixHash()).toString(
+      'hex',
+    );
   }
   toBuffer(buffer, initialOffset) {
     return this.__toBuffer(buffer, initialOffset);
