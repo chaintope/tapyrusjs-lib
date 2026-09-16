@@ -44,6 +44,12 @@ export declare class Transaction {
      */
     hashForSignature(inIndex: number, prevOutScript: Buffer, hashType: number): Buffer;
     getHash(): Buffer;
+    /**
+     * The hash an outpoint refers to. Tapyrus serializes the transaction without
+     * the scriptSig of each input for this hash, so that a change to a scriptSig
+     * does not change the identity of the transaction.
+     */
+    getMalFixHash(): Buffer;
     getId(): string;
     toBuffer(buffer?: Buffer, initialOffset?: number): Buffer;
     toHex(): string;
