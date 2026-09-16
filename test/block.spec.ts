@@ -38,21 +38,11 @@ describe('Block', () => {
         assert.strictEqual(block.version, f.version);
         assert.strictEqual(block.prevHash!.toString('hex'), f.prevHash);
         assert.strictEqual(block.merkleRoot!.toString('hex'), f.merkleRoot);
-        if (block.witnessCommit) {
-          assert.strictEqual(
-            block.witnessCommit.toString('hex'),
-            f.witnessCommit,
-          );
-        }
         assert.strictEqual(block.timestamp, f.timestamp);
         assert.strictEqual(block.bits, f.bits);
         assert.strictEqual(block.nonce, f.nonce);
         assert.strictEqual(!block.transactions, f.hex.length === 160);
-        if (f.size && f.strippedSize && f.weight) {
-          assert.strictEqual(block.byteLength(false, true), f.size);
-          assert.strictEqual(block.byteLength(false, false), f.strippedSize);
-          assert.strictEqual(block.weight(), f.weight);
-        }
+        assert.strictEqual(block.byteLength(false), f.hex.length / 2);
       });
     });
 
@@ -133,17 +123,6 @@ describe('Block', () => {
           f.merkleRoot,
         );
       });
-
-      if (f.witnessCommit) {
-        it('returns witness commit ' + f.witnessCommit + ' for ' + f.id, () => {
-          assert.strictEqual(
-            Block.calculateMerkleRoot(block.transactions!, true).toString(
-              'hex',
-            ),
-            f.witnessCommit,
-          );
-        });
-      }
     });
   });
 

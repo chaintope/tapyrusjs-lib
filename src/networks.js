@@ -3,7 +3,6 @@ Object.defineProperty(exports, '__esModule', { value: true });
 exports.NetworkId = exports.dev = exports.prod = void 0;
 exports.prod = {
   messagePrefix: '\x18Tapyrus Signed Message:\n',
-  bech32: 'bc',
   bip32: {
     public: 0x0488b21e,
     private: 0x0488ade4,
@@ -16,7 +15,6 @@ exports.prod = {
 };
 exports.dev = {
   messagePrefix: '\x18Tapyrus Signed Message:\n',
-  bech32: 'tb',
   bip32: {
     public: 0x043587cf,
     private: 0x04358394,

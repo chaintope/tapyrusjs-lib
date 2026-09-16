@@ -240,43 +240,6 @@ describe('bufferutils', () => {
       });
       testBuffer(bufferWriter, expectedBuffer);
     });
-
-    it('writeVector', () => {
-      const values = [
-        [Buffer.alloc(1, 4), Buffer.alloc(253, 5)],
-        Array(253).fill(Buffer.alloc(1, 6)),
-      ];
-      const expectedBuffer = Buffer.concat([
-        Buffer.from([0x02]),
-        Buffer.from([0x01, 0x04]),
-        Buffer.from([0xfd, 0xfd, 0x00]),
-        Buffer.alloc(253, 5),
-
-        Buffer.from([0xfd, 0xfd, 0x00]),
-        Buffer.concat(
-          Array(253)
-            .fill(0)
-            .map(() => Buffer.from([0x01, 0x06])),
-        ),
-      ]);
-
-      const bufferWriter = new BufferWriter(
-        Buffer.allocUnsafe(expectedBuffer.length),
-      );
-      values.forEach((value: Buffer[]) => {
-        const expectedOffset =
-          bufferWriter.offset +
-          varuint.encodingLength(value.length) +
-          value.reduce(
-            (sum: number, v) =>
-              sum + varuint.encodingLength(v.length) + v.length,
-            0,
-          );
-        bufferWriter.writeVector(value);
-        testBuffer(bufferWriter, expectedBuffer, expectedOffset);
-      });
-      testBuffer(bufferWriter, expectedBuffer);
-    });
   });
 
   describe('BufferReader', () => {
@@ -450,45 +413,6 @@ describe('bufferutils', () => {
           value.length;
         const val = bufferReader.readVarSlice();
         testValue(bufferReader, val, value, expectedOffset);
-      });
-    });
-
-    it('readVector', () => {
-      const values = [
-        [Buffer.alloc(1, 4), Buffer.alloc(253, 5)],
-        Array(253).fill(Buffer.alloc(1, 6)),
-      ];
-      const buffer = Buffer.concat([
-        Buffer.from([0x02]),
-        Buffer.from([0x01, 0x04]),
-        Buffer.from([0xfd, 0xfd, 0x00]),
-        Buffer.alloc(253, 5),
-
-        Buffer.from([0xfd, 0xfd, 0x00]),
-        Buffer.concat(
-          Array(253)
-            .fill(0)
-            .map(() => Buffer.from([0x01, 0x06])),
-        ),
-      ]);
-
-      const bufferReader = new BufferReader(buffer);
-      values.forEach((value: Buffer[]) => {
-        const expectedOffset =
-          bufferReader.offset +
-          varuint.encodingLength(value.length) +
-          value.reduce(
-            (sum: number, v) =>
-              sum + varuint.encodingLength(v.length) + v.length,
-            0,
-          );
-        const val = bufferReader.readVector();
-        testValue(
-          bufferReader,
-          Buffer.concat(val),
-          Buffer.concat(value),
-          expectedOffset,
-        );
       });
     });
   });

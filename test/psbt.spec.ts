@@ -10,6 +10,7 @@ import {
   Psbt,
   Signer,
   SignerAsync,
+  Transaction,
 } from '..';
 
 import * as preFixtures from './fixtures/psbt.json';
@@ -177,7 +178,6 @@ describe(`Psbt`, () => {
 
         const psbt3 = Psbt.fromBase64(f.psbt);
         delete psbt3.data.inputs[0].finalScriptSig;
-        delete psbt3.data.inputs[0].finalScriptWitness;
         assert.throws(() => {
           psbt3.extractTransaction();
         }, new RegExp('Not finalized'));
@@ -484,15 +484,10 @@ describe(`Psbt`, () => {
       assert.throws(() => {
         psbt.finalizeAllInputs();
       }, new RegExp('No script found for input #0'));
-      psbt.updateInput(0, {
-        witnessUtxo: {
-          script: Buffer.from(
-            '0014d85c2b71d0060b09c9886aeb815e50991dda124d',
-            'hex',
-          ),
-          value: 2e5,
-        },
-      });
+      const prevTx = new Transaction();
+      prevTx.addInput(Buffer.alloc(32, 1), 0);
+      prevTx.addOutput(Buffer.from([0x51]), 2e5);
+      psbt.updateInput(0, { nonWitnessUtxo: prevTx.toBuffer() });
       assert.throws(() => {
         psbt.finalizeAllInputs();
       }, new RegExp('Can not finalize input #0'));
@@ -602,10 +597,6 @@ describe(`Psbt`, () => {
   describe('getInputType', () => {
     const key = ECPair.makeRandom();
     const { publicKey } = key;
-    const p2wpkhPub = (pubkey: Buffer): Buffer =>
-      payments.p2wpkh({
-        pubkey,
-      }).output!;
     const p2pkhPub = (pubkey: Buffer): Buffer =>
       payments.p2pkh({
         pubkey,
@@ -614,39 +605,29 @@ describe(`Psbt`, () => {
       payments.p2sh({
         redeem: { output },
       }).output!;
-    const p2wshOut = (output: Buffer): Buffer =>
-      payments.p2wsh({
-        redeem: { output },
-      }).output!;
-    const p2shp2wshOut = (output: Buffer): Buffer => p2shOut(p2wshOut(output));
     const noOuter = (output: Buffer): Buffer => output;
 
     function getInputTypeTest({
       innerScript,
       outerScript,
       redeemGetter,
-      witnessGetter,
       expectedType,
-      finalize,
     }: any): void {
+      const prevTx = new Transaction();
+      prevTx.addInput(Buffer.alloc(32, 1), 0);
+      prevTx.addOutput(outerScript(innerScript(publicKey)), 2e3);
       const psbt = new Psbt();
       psbt
         .addInput({
-          hash:
-            '0000000000000000000000000000000000000000000000000000000000000000',
+          hash: prevTx.getHash(),
           index: 0,
-          witnessUtxo: {
-            script: outerScript(innerScript(publicKey)),
-            value: 2e3,
-          },
+          nonWitnessUtxo: prevTx.toBuffer(),
           ...(redeemGetter ? { redeemScript: redeemGetter(publicKey) } : {}),
-          ...(witnessGetter ? { witnessScript: witnessGetter(publicKey) } : {}),
         })
         .addOutput({
-          script: Buffer.from('0014d85c2b71d0060b09c9886aeb815e50991dda124d'),
+          script: p2pkhPub(publicKey),
           value: 1800,
         });
-      if (finalize) psbt.signInput(0, key).finalizeInput(0);
       const type = psbt.getInputType(0);
       assert.strictEqual(type, expectedType, 'incorrect input type');
     }
@@ -655,45 +636,13 @@ describe(`Psbt`, () => {
         innerScript: p2pkhPub,
         outerScript: noOuter,
         redeemGetter: null,
-        witnessGetter: null,
         expectedType: 'pubkeyhash',
-      },
-      {
-        innerScript: p2wpkhPub,
-        outerScript: noOuter,
-        redeemGetter: null,
-        witnessGetter: null,
-        expectedType: 'witnesspubkeyhash',
       },
       {
         innerScript: p2pkhPub,
         outerScript: p2shOut,
         redeemGetter: p2pkhPub,
-        witnessGetter: null,
         expectedType: 'p2sh-pubkeyhash',
-      },
-      {
-        innerScript: p2wpkhPub,
-        outerScript: p2shOut,
-        redeemGetter: p2wpkhPub,
-        witnessGetter: null,
-        expectedType: 'p2sh-witnesspubkeyhash',
-        finalize: true,
-      },
-      {
-        innerScript: p2pkhPub,
-        outerScript: p2wshOut,
-        redeemGetter: null,
-        witnessGetter: p2pkhPub,
-        expectedType: 'p2wsh-pubkeyhash',
-        finalize: true,
-      },
-      {
-        innerScript: p2pkhPub,
-        outerScript: p2shp2wshOut,
-        redeemGetter: (pk: Buffer): Buffer => p2wshOut(p2pkhPub(pk)),
-        witnessGetter: p2pkhPub,
-        expectedType: 'p2sh-p2wsh-pubkeyhash',
       },
     ].forEach(getInputTypeTest);
   });
@@ -734,57 +683,19 @@ describe(`Psbt`, () => {
         psbt.inputHasPubkey(0, Buffer.from([]));
       }, new RegExp("Can't find pubkey in input without Utxo data"));
 
-      psbt.updateInput(0, {
-        witnessUtxo: {
-          value: 1337,
-          script: payments.p2sh({
-            redeem: { output: Buffer.from([0x51]) },
-          }).output!,
-        },
-      });
+      const prevTx = new Transaction();
+      prevTx.addInput(Buffer.alloc(32, 1), 0);
+      prevTx.addOutput(
+        payments.p2sh({ redeem: { output: Buffer.from([0x51]) } }).output!,
+        1337,
+      );
+      psbt.updateInput(0, { nonWitnessUtxo: prevTx.toBuffer() });
 
       assert.throws(() => {
         psbt.inputHasPubkey(0, Buffer.from([]));
       }, new RegExp('scriptPubkey is P2SH but redeemScript missing'));
 
-      delete psbt.data.inputs[0].witnessUtxo;
-
-      psbt.updateInput(0, {
-        witnessUtxo: {
-          value: 1337,
-          script: payments.p2wsh({
-            redeem: { output: Buffer.from([0x51]) },
-          }).output!,
-        },
-      });
-
-      assert.throws(() => {
-        psbt.inputHasPubkey(0, Buffer.from([]));
-      }, new RegExp('scriptPubkey or redeemScript is P2WSH but witnessScript missing'));
-
-      delete psbt.data.inputs[0].witnessUtxo;
-
-      psbt.updateInput(0, {
-        witnessUtxo: {
-          value: 1337,
-          script: payments.p2sh({
-            redeem: payments.p2wsh({
-              redeem: { output: Buffer.from([0x51]) },
-            }),
-          }).output!,
-        },
-        redeemScript: payments.p2wsh({
-          redeem: { output: Buffer.from([0x51]) },
-        }).output!,
-      });
-
-      assert.throws(() => {
-        psbt.inputHasPubkey(0, Buffer.from([]));
-      }, new RegExp('scriptPubkey or redeemScript is P2WSH but witnessScript missing'));
-
-      psbt.updateInput(0, {
-        witnessScript: Buffer.from([0x51]),
-      });
+      psbt.updateInput(0, { redeemScript: Buffer.from([0x51]) });
 
       assert.doesNotThrow(() => {
         psbt.inputHasPubkey(0, Buffer.from([0x51]));
@@ -843,49 +754,56 @@ describe(`Psbt`, () => {
         psbt.outputHasPubkey(0, Buffer.from([]));
       }, new RegExp('scriptPubkey is P2SH but redeemScript missing'));
 
-      (psbt as any).__CACHE.__TX.outs[0].script = payments.p2wsh({
-        redeem: { output: Buffer.from([0x51]) },
-      }).output!;
-
-      assert.throws(() => {
-        psbt.outputHasPubkey(0, Buffer.from([]));
-      }, new RegExp('scriptPubkey or redeemScript is P2WSH but witnessScript missing'));
-
-      (psbt as any).__CACHE.__TX.outs[0].script = payments.p2sh({
-        redeem: payments.p2wsh({
-          redeem: { output: Buffer.from([0x51]) },
-        }),
-      }).output!;
-
-      psbt.updateOutput(0, {
-        redeemScript: payments.p2wsh({
-          redeem: { output: Buffer.from([0x51]) },
-        }).output!,
-      });
-
-      assert.throws(() => {
-        psbt.outputHasPubkey(0, Buffer.from([]));
-      }, new RegExp('scriptPubkey or redeemScript is P2WSH but witnessScript missing'));
-
-      delete psbt.data.outputs[0].redeemScript;
-
-      psbt.updateOutput(0, {
-        witnessScript: Buffer.from([0x51]),
-      });
-
-      assert.throws(() => {
-        psbt.outputHasPubkey(0, Buffer.from([]));
-      }, new RegExp('scriptPubkey is P2SH but redeemScript missing'));
-
-      psbt.updateOutput(0, {
-        redeemScript: payments.p2wsh({
-          redeem: { output: Buffer.from([0x51]) },
-        }).output!,
-      });
+      psbt.updateOutput(0, { redeemScript: Buffer.from([0x51]) });
 
       assert.doesNotThrow(() => {
         psbt.outputHasPubkey(0, Buffer.from([0x51]));
       });
+    });
+  });
+
+  describe('witness fields', () => {
+    const prevTx = new Transaction();
+    prevTx.addInput(Buffer.alloc(32, 1), 0);
+    prevTx.addOutput(Buffer.from([0x51]), 1337);
+
+    it('rejects witnessUtxo on addInput', () => {
+      const psbt = new Psbt();
+      assert.throws(() => {
+        psbt.addInput({
+          hash: prevTx.getHash(),
+          index: 0,
+          witnessUtxo: { script: Buffer.from([0x51]), value: 1337 },
+        } as any);
+      }, new RegExp('witnessUtxo is not supported for input'));
+    });
+
+    it('rejects witnessScript on updateInput', () => {
+      const psbt = new Psbt();
+      psbt.addInput({ hash: prevTx.getHash(), index: 0 });
+      assert.throws(() => {
+        psbt.updateInput(0, { witnessScript: Buffer.from([0x51]) } as any);
+      }, new RegExp('witnessScript is not supported for input'));
+    });
+
+    it('rejects finalScriptWitness on updateInput', () => {
+      const psbt = new Psbt();
+      psbt.addInput({ hash: prevTx.getHash(), index: 0 });
+      assert.throws(() => {
+        psbt.updateInput(0, {
+          finalScriptWitness: Buffer.from([0x00]),
+        } as any);
+      }, new RegExp('finalScriptWitness is not supported for input'));
+    });
+
+    it('rejects witnessScript on updateOutput', () => {
+      const psbt = new Psbt();
+      psbt
+        .addInput({ hash: prevTx.getHash(), index: 0 })
+        .addOutput({ script: Buffer.from([0x51]), value: 1000 });
+      assert.throws(() => {
+        psbt.updateOutput(0, { witnessScript: Buffer.from([0x51]) } as any);
+      }, new RegExp('witnessScript is not supported for output'));
     });
   });
 

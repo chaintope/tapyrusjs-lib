@@ -18,12 +18,6 @@ export function fromOutputScript(output: Buffer, network?: Network): Payment {
     return payments.p2sh({ output, network });
   } catch (e) {}
   try {
-    return payments.p2wpkh({ output, network });
-  } catch (e) {}
-  try {
-    return payments.p2wsh({ output, network });
-  } catch (e) {}
-  try {
     return payments.cp2pkh({ output, network });
   } catch (e) {}
   try {
@@ -76,7 +70,6 @@ export function redeemFn(
         network,
         output: chunks[chunks.length - 1] as Buffer,
         input: bscript.compile(chunks.slice(0, -1)),
-        witness: a.witness || [],
       };
     },
   ) as PaymentFunction;
@@ -112,17 +105,6 @@ export function checkInput(
   if (!Buffer.isBuffer(redeem.output)) throw new TypeError('Input is invalid');
 
   return _checkRedeem(redeem, hashForCheck);
-}
-
-export function checkWitness(a: Payment): void {
-  if (a.witness) {
-    if (
-      a.redeem &&
-      a.redeem.witness &&
-      !stacksEqual(a.redeem.witness, a.witness)
-    )
-      throw new TypeError('Witness and redeem.witness mismatch');
-  }
 }
 
 export function checkRedeem(
@@ -161,16 +143,10 @@ function _checkRedeem(redeem: Payment, hashForCheck: Buffer): Buffer | null {
   }
 
   if (redeem.input) {
-    const hasInput = redeem.input.length > 0;
-    const hasWitness = redeem.witness && redeem.witness.length > 0;
-    if (!hasInput && !hasWitness) throw new TypeError('Empty input');
-    if (hasInput && hasWitness)
-      throw new TypeError('Input and witness provided');
-    if (hasInput) {
-      const richunks = bscript.decompile(redeem.input) as Stack;
-      if (!bscript.isPushOnly(richunks))
-        throw new TypeError('Non push-only scriptSig');
-    }
+    if (redeem.input.length === 0) throw new TypeError('Empty input');
+    const richunks = bscript.decompile(redeem.input) as Stack;
+    if (!bscript.isPushOnly(richunks))
+      throw new TypeError('Non push-only scriptSig');
   }
   return hash2;
 }

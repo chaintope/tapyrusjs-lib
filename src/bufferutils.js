@@ -83,10 +83,6 @@ class BufferWriter {
     this.writeVarInt(slice.length);
     this.writeSlice(slice);
   }
-  writeVector(vector) {
-    this.writeVarInt(vector.length);
-    vector.forEach(buf => this.writeVarSlice(buf));
-  }
 }
 exports.BufferWriter = BufferWriter;
 /**
@@ -133,12 +129,6 @@ class BufferReader {
   }
   readVarSlice() {
     return this.readSlice(this.readVarInt());
-  }
-  readVector() {
-    const count = this.readVarInt();
-    const vector = [];
-    for (let i = 0; i < count; i++) vector.push(this.readVarSlice());
-    return vector;
   }
 }
 exports.BufferReader = BufferReader;

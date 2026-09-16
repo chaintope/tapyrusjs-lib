@@ -8,7 +8,6 @@ import {
   checkHash,
   checkInput,
   checkRedeem,
-  checkWitness,
   chunksFn,
   redeemFn,
 } from './util';
@@ -18,7 +17,6 @@ const OPS = bscript.OPS;
 const bs58check = require('bs58check');
 
 // input: [redeemScriptSig ...] {redeemScript}
-// witness: <?>
 // output: OP_HASH160 {hash160(redeemScript)} OP_EQUAL
 export function p2sh(a: Payment, opts?: PaymentOpts): Payment {
   if (!a.address && !a.hash && !a.output && !a.redeem && !a.input)
@@ -37,10 +35,8 @@ export function p2sh(a: Payment, opts?: PaymentOpts): Payment {
         network: typef.maybe(typef.Object),
         output: typef.maybe(typef.Buffer),
         input: typef.maybe(typef.Buffer),
-        witness: typef.maybe(typef.arrayOf(typef.Buffer)),
       }),
       input: typef.maybe(typef.Buffer),
-      witness: typef.maybe(typef.arrayOf(typef.Buffer)),
     },
     a,
   );
@@ -88,10 +84,6 @@ export function p2sh(a: Payment, opts?: PaymentOpts): Payment {
       ),
     );
   });
-  lazy.prop(o, 'witness', () => {
-    if (o.redeem && o.redeem.witness) return o.redeem.witness;
-    if (o.input) return [];
-  });
   lazy.prop(o, 'name', () => {
     const nameParts = ['p2sh'];
     if (o.redeem !== undefined && o.redeem.name !== undefined)
@@ -135,8 +127,6 @@ export function p2sh(a: Payment, opts?: PaymentOpts): Payment {
     }
 
     checkRedeem(a, network, redeemFn(a, network), hash);
-
-    checkWitness(a);
   }
 
   return Object.assign(o, a);

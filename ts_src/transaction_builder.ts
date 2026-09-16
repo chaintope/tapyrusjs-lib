@@ -20,7 +20,6 @@ const PREVOUT_TYPES: Set<string> = new Set([
   // Raw
   'p2pkh',
   'p2pk',
-  'p2wpkh',
   'p2ms',
   // Colored
   'cp2pkh',
@@ -28,28 +27,17 @@ const PREVOUT_TYPES: Set<string> = new Set([
   // P2SH wrapped
   'p2sh-p2pkh',
   'p2sh-p2pk',
-  'p2sh-p2wpkh',
   'p2sh-p2ms',
-  // P2WSH wrapped
-  'p2wsh-p2pkh',
-  'p2wsh-p2pk',
-  'p2wsh-p2ms',
-  // P2SH-P2WSH wrapper
-  'p2sh-p2wsh-p2pkh',
-  'p2sh-p2wsh-p2pk',
-  'p2sh-p2wsh-p2ms',
 ]);
 
 type MaybeBuffer = Buffer | undefined;
 type TxbSignatures = Buffer[] | MaybeBuffer[];
 type TxbPubkeys = MaybeBuffer[];
-type TxbWitness = Buffer[];
 type TxbScriptType = string;
 type TxbScript = Buffer;
 
 interface TxbInput {
   value?: number;
-  hasWitness?: boolean;
   signScript?: TxbScript;
   signType?: TxbScriptType;
   prevOutScript?: TxbScript;
@@ -58,9 +46,6 @@ interface TxbInput {
   prevOutType?: TxbScriptType;
   pubkeys?: TxbPubkeys;
   signatures?: TxbSignatures;
-  witness?: TxbWitness;
-  witnessScript?: TxbScript;
-  witnessScriptType?: TxbScriptType;
   script?: TxbScript;
   sequence?: number;
   scriptSig?: TxbScript;
@@ -80,8 +65,6 @@ interface TxbSignArg {
   keyPair: Signer;
   redeemScript?: Buffer;
   hashType?: number;
-  witnessValue?: number;
-  witnessScript?: Buffer;
 }
 
 function tfMessage(type: any, value: any, message: string): void {
@@ -121,7 +104,6 @@ export class TransactionBuilder {
       txb.__addInputUnsafe(txIn.hash, txIn.index, {
         sequence: txIn.sequence,
         script: txIn.script,
-        witness: txIn.witness,
       });
     });
 
@@ -214,7 +196,7 @@ export class TransactionBuilder {
       prevOutScript = txOut.script;
       value = (txOut as Output).value;
 
-      txHash = txHash.getHash(false) as Buffer;
+      txHash = txHash.getHash() as Buffer;
     }
 
     return this.__addInputUnsafe(txHash, vout, {
@@ -229,7 +211,7 @@ export class TransactionBuilder {
       throw new Error('No, this would invalidate signatures');
     }
 
-    // Attempt to get a script if it's a base58 or bech32 address string
+    // Attempt to get a script if it's a base58 address string
     if (typeof scriptPubKey === 'string') {
       scriptPubKey = baddress.toOutputScript(scriptPubKey, this.network);
     }
@@ -250,8 +232,6 @@ export class TransactionBuilder {
     keyPair?: Signer,
     redeemScript?: Buffer,
     hashType?: number,
-    witnessValue?: number,
-    witnessScript?: Buffer,
   ): void {
     trySign(
       getSigningData(
@@ -263,8 +243,6 @@ export class TransactionBuilder {
         keyPair,
         redeemScript,
         hashType,
-        witnessValue,
-        witnessScript,
         this.__USE_LOW_R,
       ),
     );
@@ -287,7 +265,7 @@ export class TransactionBuilder {
 
     // derive what we can from the scriptSig
     if (options.script !== undefined) {
-      input = expandInput(options.script, options.witness || []);
+      input = expandInput(options.script);
     }
 
     // if an input value was given, retain it
@@ -346,12 +324,11 @@ export class TransactionBuilder {
       }
 
       tx.setInputScript(i, result.input!);
-      tx.setWitness(i, result.witness!);
     });
 
     if (!allowIncomplete) {
       // do not rely on this, its merely a last resort
-      if (this.__overMaximumFees(tx.virtualSize())) {
+      if (this.__overMaximumFees(tx.byteLength())) {
         throw new Error('Transaction has absurd fees');
       }
     }
@@ -439,33 +416,16 @@ export class TransactionBuilder {
 
 function expandInput(
   scriptSig: Buffer,
-  witnessStack: Buffer[],
   type?: string,
   scriptPubKey?: Buffer,
 ): TxbInput {
-  if (scriptSig.length === 0 && witnessStack.length === 0) return {};
+  if (scriptSig.length === 0) return {};
   if (!type) {
-    let ssType: string | undefined = classify.input(scriptSig, true);
-    let wsType: string | undefined = classify.witness(witnessStack, true);
-    if (ssType === SCRIPT_TYPES.NONSTANDARD) ssType = undefined;
-    if (wsType === SCRIPT_TYPES.NONSTANDARD) wsType = undefined;
-    type = ssType || wsType;
+    const ssType: string | undefined = classify.input(scriptSig, true);
+    if (ssType !== SCRIPT_TYPES.NONSTANDARD) type = ssType;
   }
 
   switch (type) {
-    case SCRIPT_TYPES.P2WPKH: {
-      const { output, pubkey, signature } = payments.p2wpkh({
-        witness: witnessStack,
-      });
-
-      return {
-        prevOutScript: output,
-        prevOutType: SCRIPT_TYPES.P2WPKH,
-        pubkeys: [pubkey],
-        signatures: [signature],
-      };
-    }
-
     case SCRIPT_TYPES.P2PKH: {
       const { output, pubkey, signature } = payments.p2pkh({
         input: scriptSig,
@@ -510,16 +470,10 @@ function expandInput(
   if (type === SCRIPT_TYPES.P2SH) {
     const { output, redeem } = payments.p2sh({
       input: scriptSig,
-      witness: witnessStack,
     });
 
     const outputType = classify.output(redeem!.output!);
-    const expanded = expandInput(
-      redeem!.input!,
-      redeem!.witness!,
-      outputType,
-      redeem!.output,
-    );
+    const expanded = expandInput(redeem!.input!, outputType, redeem!.output);
     if (!expanded.prevOutType) return {};
 
     return {
@@ -527,38 +481,6 @@ function expandInput(
       prevOutType: SCRIPT_TYPES.P2SH,
       redeemScript: redeem!.output,
       redeemScriptType: expanded.prevOutType,
-      witnessScript: expanded.witnessScript,
-      witnessScriptType: expanded.witnessScriptType,
-
-      pubkeys: expanded.pubkeys,
-      signatures: expanded.signatures,
-    };
-  }
-
-  if (type === SCRIPT_TYPES.P2WSH) {
-    const { output, redeem } = payments.p2wsh({
-      input: scriptSig,
-      witness: witnessStack,
-    });
-    const outputType = classify.output(redeem!.output!);
-    let expanded;
-    if (outputType === SCRIPT_TYPES.P2WPKH) {
-      expanded = expandInput(redeem!.input!, redeem!.witness!, outputType);
-    } else {
-      expanded = expandInput(
-        bscript.compile(redeem!.witness!),
-        [],
-        outputType,
-        redeem!.output,
-      );
-    }
-    if (!expanded.prevOutType) return {};
-
-    return {
-      prevOutScript: output,
-      prevOutType: SCRIPT_TYPES.P2WSH,
-      witnessScript: redeem!.output,
-      witnessScriptType: expanded.prevOutType,
 
       pubkeys: expanded.pubkeys,
       signatures: expanded.signatures,
@@ -634,21 +556,6 @@ function expandOutput(script: Buffer, ourPubKey?: Buffer): TxbOutput {
       };
     }
 
-    case SCRIPT_TYPES.P2WPKH: {
-      if (!ourPubKey) return { type };
-
-      // does our hash160(pubKey) match the output scripts?
-      const wpkh1 = payments.p2wpkh({ output: script }).hash;
-      const wpkh2 = bcrypto.hash160(ourPubKey);
-      if (!wpkh1!.equals(wpkh2)) return { type };
-
-      return {
-        type,
-        pubkeys: [ourPubKey],
-        signatures: [undefined],
-      };
-    }
-
     case SCRIPT_TYPES.P2PK: {
       const p2pk = payments.p2pk({ output: script });
       return {
@@ -691,58 +598,7 @@ function prepareInput(
   input: TxbInput,
   ourPubKey: Buffer,
   redeemScript?: Buffer,
-  witnessScript?: Buffer,
 ): TxbInput {
-  if (redeemScript && witnessScript) {
-    const p2wsh = payments.p2wsh({
-      redeem: { output: witnessScript },
-    }) as Payment;
-    const p2wshAlt = payments.p2wsh({ output: redeemScript }) as Payment;
-    const p2sh = payments.p2sh({ redeem: { output: redeemScript } }) as Payment;
-    const p2shAlt = payments.p2sh({ redeem: p2wsh }) as Payment;
-
-    // enforces P2SH(P2WSH(...))
-    if (!p2wsh.hash!.equals(p2wshAlt.hash!))
-      throw new Error('Witness script inconsistent with prevOutScript');
-    if (!p2sh.hash!.equals(p2shAlt.hash!))
-      throw new Error('Redeem script inconsistent with prevOutScript');
-
-    const expanded = expandOutput(p2wsh.redeem!.output!, ourPubKey);
-    if (!expanded.pubkeys)
-      throw new Error(
-        expanded.type +
-          ' not supported as witnessScript (' +
-          bscript.toASM(witnessScript) +
-          ')',
-      );
-    if (input.signatures && input.signatures.some(x => x !== undefined)) {
-      expanded.signatures = input.signatures;
-    }
-
-    const signScript = witnessScript;
-    if (expanded.type === SCRIPT_TYPES.P2WPKH)
-      throw new Error('P2SH(P2WSH(P2WPKH)) is a consensus failure');
-
-    return {
-      redeemScript,
-      redeemScriptType: SCRIPT_TYPES.P2WSH,
-
-      witnessScript,
-      witnessScriptType: expanded.type,
-
-      prevOutType: SCRIPT_TYPES.P2SH,
-      prevOutScript: p2sh.output,
-
-      hasWitness: true,
-      signScript,
-      signType: expanded.type,
-
-      pubkeys: expanded.pubkeys,
-      signatures: expanded.signatures,
-      maxSignatures: expanded.maxSignatures,
-    };
-  }
-
   if (redeemScript) {
     const p2sh = payments.p2sh({ redeem: { output: redeemScript } }) as Payment;
 
@@ -769,10 +625,7 @@ function prepareInput(
       expanded.signatures = input.signatures;
     }
 
-    let signScript = redeemScript;
-    if (expanded.type === SCRIPT_TYPES.P2WPKH) {
-      signScript = payments.p2pkh({ pubkey: expanded.pubkeys[0] }).output!;
-    }
+    const signScript = redeemScript;
 
     return {
       redeemScript,
@@ -781,49 +634,6 @@ function prepareInput(
       prevOutType: SCRIPT_TYPES.P2SH,
       prevOutScript: p2sh.output,
 
-      hasWitness: expanded.type === SCRIPT_TYPES.P2WPKH,
-      signScript,
-      signType: expanded.type,
-
-      pubkeys: expanded.pubkeys,
-      signatures: expanded.signatures,
-      maxSignatures: expanded.maxSignatures,
-    };
-  }
-
-  if (witnessScript) {
-    const p2wsh = payments.p2wsh({ redeem: { output: witnessScript } });
-
-    if (input.prevOutScript) {
-      const p2wshAlt = payments.p2wsh({ output: input.prevOutScript });
-      if (!p2wsh.hash!.equals(p2wshAlt.hash!))
-        throw new Error('Witness script inconsistent with prevOutScript');
-    }
-
-    const expanded = expandOutput(p2wsh.redeem!.output!, ourPubKey);
-    if (!expanded.pubkeys)
-      throw new Error(
-        expanded.type +
-          ' not supported as witnessScript (' +
-          bscript.toASM(witnessScript) +
-          ')',
-      );
-    if (input.signatures && input.signatures.some(x => x !== undefined)) {
-      expanded.signatures = input.signatures;
-    }
-
-    const signScript = witnessScript;
-    if (expanded.type === SCRIPT_TYPES.P2WPKH)
-      throw new Error('P2WSH(P2WPKH) is a consensus failure');
-
-    return {
-      witnessScript,
-      witnessScriptType: expanded.type,
-
-      prevOutType: SCRIPT_TYPES.P2WSH,
-      prevOutScript: p2wsh.output,
-
-      hasWitness: true,
       signScript,
       signType: expanded.type,
 
@@ -839,10 +649,6 @@ function prepareInput(
       throw new Error(
         'PrevOutScript is ' + input.prevOutType + ', requires redeemScript',
       );
-    if (input.prevOutType === SCRIPT_TYPES.P2WSH)
-      throw new Error(
-        'PrevOutScript is ' + input.prevOutType + ', requires witnessScript',
-      );
     if (!input.prevOutScript) throw new Error('PrevOutScript is missing');
 
     const expanded = expandOutput(input.prevOutScript, ourPubKey);
@@ -857,17 +663,12 @@ function prepareInput(
       expanded.signatures = input.signatures;
     }
 
-    let signScript = input.prevOutScript;
-    if (expanded.type === SCRIPT_TYPES.P2WPKH) {
-      signScript = payments.p2pkh({ pubkey: expanded.pubkeys[0] })
-        .output as Buffer;
-    }
+    const signScript = input.prevOutScript;
 
     return {
       prevOutType: expanded.type,
       prevOutScript: input.prevOutScript,
 
-      hasWitness: expanded.type === SCRIPT_TYPES.P2WPKH,
       signScript,
       signType: expanded.type,
 
@@ -882,7 +683,6 @@ function prepareInput(
     prevOutType: SCRIPT_TYPES.P2PKH,
     prevOutScript,
 
-    hasWitness: false,
     signScript: prevOutScript,
     signType: SCRIPT_TYPES.P2PKH,
 
@@ -905,15 +705,6 @@ function build(
       if (signatures.length === 0) break;
 
       return payments.p2pkh({ pubkey: pubkeys[0], signature: signatures[0] });
-    }
-    case SCRIPT_TYPES.P2WPKH: {
-      if (pubkeys.length === 0) break;
-      if (signatures.length === 0) break;
-
-      return payments.p2wpkh({
-        pubkey: pubkeys[0],
-        signature: signatures[0],
-      });
     }
     case SCRIPT_TYPES.P2PK: {
       if (pubkeys.length === 0) break;
@@ -945,19 +736,6 @@ function build(
         redeem: {
           output: redeem.output || input.redeemScript,
           input: redeem.input,
-          witness: redeem.witness,
-        },
-      });
-    }
-    case SCRIPT_TYPES.P2WSH: {
-      const redeem = build(input.witnessScriptType!, input, allowIncomplete);
-      if (!redeem) return;
-
-      return payments.p2wsh({
-        redeem: {
-          output: input.witnessScript,
-          input: redeem.input,
-          witness: redeem.witness,
         },
       });
     }
@@ -990,8 +768,7 @@ function canSign(input: TxbInput): boolean {
     input.pubkeys !== undefined &&
     input.signatures !== undefined &&
     input.signatures.length === input.pubkeys.length &&
-    input.pubkeys.length > 0 &&
-    (input.hasWitness === false || input.value !== undefined)
+    input.pubkeys.length > 0
   );
 }
 
@@ -1031,18 +808,8 @@ function checkSignArgs(inputs: TxbInput[], signParams: TxbSignArg): void {
       }
       tfMessage(
         typeforce.value(undefined),
-        signParams.witnessScript,
-        `${posType} requires NO witnessScript`,
-      );
-      tfMessage(
-        typeforce.value(undefined),
         signParams.redeemScript,
         `${posType} requires NO redeemScript`,
-      );
-      tfMessage(
-        typeforce.value(undefined),
-        signParams.witnessValue,
-        `${posType} requires NO witnessValue`,
       );
       break;
     case 'p2pk':
@@ -1053,40 +820,8 @@ function checkSignArgs(inputs: TxbInput[], signParams: TxbSignArg): void {
       }
       tfMessage(
         typeforce.value(undefined),
-        signParams.witnessScript,
-        `${posType} requires NO witnessScript`,
-      );
-      tfMessage(
-        typeforce.value(undefined),
         signParams.redeemScript,
         `${posType} requires NO redeemScript`,
-      );
-      tfMessage(
-        typeforce.value(undefined),
-        signParams.witnessValue,
-        `${posType} requires NO witnessValue`,
-      );
-      break;
-    case 'p2wpkh':
-      if (prevOutType && prevOutType !== 'witnesspubkeyhash') {
-        throw new TypeError(
-          `input #${signParams.vin} is not of type p2wpkh: ${prevOutType}`,
-        );
-      }
-      tfMessage(
-        typeforce.value(undefined),
-        signParams.witnessScript,
-        `${posType} requires NO witnessScript`,
-      );
-      tfMessage(
-        typeforce.value(undefined),
-        signParams.redeemScript,
-        `${posType} requires NO redeemScript`,
-      );
-      tfMessage(
-        types.Satoshi,
-        signParams.witnessValue,
-        `${posType} requires witnessValue`,
       );
       break;
     case 'p2ms':
@@ -1097,40 +832,8 @@ function checkSignArgs(inputs: TxbInput[], signParams: TxbSignArg): void {
       }
       tfMessage(
         typeforce.value(undefined),
-        signParams.witnessScript,
-        `${posType} requires NO witnessScript`,
-      );
-      tfMessage(
-        typeforce.value(undefined),
         signParams.redeemScript,
         `${posType} requires NO redeemScript`,
-      );
-      tfMessage(
-        typeforce.value(undefined),
-        signParams.witnessValue,
-        `${posType} requires NO witnessValue`,
-      );
-      break;
-    case 'p2sh-p2wpkh':
-      if (prevOutType && prevOutType !== 'scripthash') {
-        throw new TypeError(
-          `input #${signParams.vin} is not of type p2sh-p2wpkh: ${prevOutType}`,
-        );
-      }
-      tfMessage(
-        typeforce.value(undefined),
-        signParams.witnessScript,
-        `${posType} requires NO witnessScript`,
-      );
-      tfMessage(
-        typeforce.Buffer,
-        signParams.redeemScript,
-        `${posType} requires redeemScript`,
-      );
-      tfMessage(
-        types.Satoshi,
-        signParams.witnessValue,
-        `${posType} requires witnessValue`,
       );
       break;
     case 'p2sh-p2ms':
@@ -1142,67 +845,9 @@ function checkSignArgs(inputs: TxbInput[], signParams: TxbSignArg): void {
         );
       }
       tfMessage(
-        typeforce.value(undefined),
-        signParams.witnessScript,
-        `${posType} requires NO witnessScript`,
-      );
-      tfMessage(
         typeforce.Buffer,
         signParams.redeemScript,
         `${posType} requires redeemScript`,
-      );
-      tfMessage(
-        typeforce.value(undefined),
-        signParams.witnessValue,
-        `${posType} requires NO witnessValue`,
-      );
-      break;
-    case 'p2wsh-p2ms':
-    case 'p2wsh-p2pk':
-    case 'p2wsh-p2pkh':
-      if (prevOutType && prevOutType !== 'witnessscripthash') {
-        throw new TypeError(
-          `input #${signParams.vin} is not of type ${posType}: ${prevOutType}`,
-        );
-      }
-      tfMessage(
-        typeforce.Buffer,
-        signParams.witnessScript,
-        `${posType} requires witnessScript`,
-      );
-      tfMessage(
-        typeforce.value(undefined),
-        signParams.redeemScript,
-        `${posType} requires NO redeemScript`,
-      );
-      tfMessage(
-        types.Satoshi,
-        signParams.witnessValue,
-        `${posType} requires witnessValue`,
-      );
-      break;
-    case 'p2sh-p2wsh-p2ms':
-    case 'p2sh-p2wsh-p2pk':
-    case 'p2sh-p2wsh-p2pkh':
-      if (prevOutType && prevOutType !== 'scripthash') {
-        throw new TypeError(
-          `input #${signParams.vin} is not of type ${posType}: ${prevOutType}`,
-        );
-      }
-      tfMessage(
-        typeforce.Buffer,
-        signParams.witnessScript,
-        `${posType} requires witnessScript`,
-      );
-      tfMessage(
-        typeforce.Buffer,
-        signParams.redeemScript,
-        `${posType} requires witnessScript`,
-      );
-      tfMessage(
-        types.Satoshi,
-        signParams.witnessValue,
-        `${posType} requires witnessScript`,
       );
       break;
     case 'cp2pkh':
@@ -1213,18 +858,8 @@ function checkSignArgs(inputs: TxbInput[], signParams: TxbSignArg): void {
       }
       tfMessage(
         typeforce.value(undefined),
-        signParams.witnessScript,
-        `${posType} requires NO witnessScript`,
-      );
-      tfMessage(
-        typeforce.value(undefined),
         signParams.redeemScript,
         `${posType} requires NO redeemScript`,
-      );
-      tfMessage(
-        typeforce.value(undefined),
-        signParams.witnessValue,
-        `${posType} requires NO witnessValue`,
       );
       break;
     case 'cp2sh':
@@ -1234,19 +869,9 @@ function checkSignArgs(inputs: TxbInput[], signParams: TxbSignArg): void {
         );
       }
       tfMessage(
-        typeforce.value(undefined),
-        signParams.witnessScript,
-        `${posType} requires NO witnessScript`,
-      );
-      tfMessage(
         typeforce.Buffer,
         signParams.redeemScript,
         `${posType} requires redeemScript`,
-      );
-      tfMessage(
-        typeforce.value(undefined),
-        signParams.witnessValue,
-        `${posType} requires NO witnessValue`,
       );
       break;
   }
@@ -1265,13 +890,6 @@ function trySign({
   for (const [i, pubKey] of input.pubkeys!.entries()) {
     if (!ourPubKey.equals(pubKey!)) continue;
     if (input.signatures![i]) throw new Error('Signature already exists');
-
-    // TODO: add tests
-    if (ourPubKey.length !== 33 && input.hasWitness) {
-      throw new Error(
-        'BIP143 rejects uncompressed public keys in P2WPKH or P2WSH',
-      );
-    }
 
     const signature = keyPair.sign(signatureHash, useLowR);
     input.signatures![i] = bscript.signature.encode(signature, hashType);
@@ -1301,8 +919,6 @@ function getSigningData(
   keyPair?: Signer,
   redeemScript?: Buffer,
   hashType?: number,
-  witnessValue?: number,
-  witnessScript?: Buffer,
   useLowR?: boolean,
 ): SigningData {
   let vin: number;
@@ -1314,14 +930,7 @@ function getSigningData(
     vin = signParams;
   } else if (typeof signParams === 'object') {
     checkSignArgs(inputs, signParams);
-    ({
-      vin,
-      keyPair,
-      redeemScript,
-      hashType,
-      witnessValue,
-      witnessScript,
-    } = signParams);
+    ({ vin, keyPair, redeemScript, hashType } = signParams);
   } else {
     throw new TypeError(
       'TransactionBuilder sign first arg must be TxbSignArg or number',
@@ -1352,44 +961,20 @@ function getSigningData(
   const ourPubKey =
     keyPair.publicKey || (keyPair.getPublicKey && keyPair.getPublicKey());
   if (!canSign(input)) {
-    if (witnessValue !== undefined) {
-      if (input.value !== undefined && input.value !== witnessValue)
-        throw new Error('Input did not match witnessValue');
-      typeforce(types.Satoshi, witnessValue);
-      input.value = witnessValue;
-    }
+    const prepared = prepareInput(input, ourPubKey, redeemScript);
 
-    if (!canSign(input)) {
-      const prepared = prepareInput(
-        input,
-        ourPubKey,
-        redeemScript,
-        witnessScript,
-      );
-
-      // updates inline
-      Object.assign(input, prepared);
-    }
+    // updates inline
+    Object.assign(input, prepared);
 
     if (!canSign(input)) throw Error(input.prevOutType + ' not supported');
   }
 
   // ready to sign
-  let signatureHash: Buffer;
-  if (input.hasWitness) {
-    signatureHash = tx.hashForWitnessV0(
-      vin,
-      input.signScript as Buffer,
-      input.value as number,
-      hashType,
-    );
-  } else {
-    signatureHash = tx.hashForSignature(
-      vin,
-      input.signScript as Buffer,
-      hashType,
-    );
-  }
+  const signatureHash: Buffer = tx.hashForSignature(
+    vin,
+    input.signScript as Buffer,
+    hashType,
+  );
 
   return {
     input,

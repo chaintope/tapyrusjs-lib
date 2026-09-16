@@ -152,6 +152,10 @@ describe('Bitcoin-core', () => {
       const fhex = f[1];
       //      const verifyFlags = f[2] // TODO: do we need to test this?
 
+      // Tapyrus のトランザクションは witness を持たないため、
+      // witness マーカーを含む Bitcoin のベクタは対象外とする
+      if (typeof fhex === 'string' && fhex.slice(8, 12) === '0001') return;
+
       it('can decode ' + fhex, () => {
         const transaction = bitcoin.Transaction.fromHex(fhex as string);
 

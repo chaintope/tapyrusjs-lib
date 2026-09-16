@@ -42,10 +42,6 @@ function p2pk(a, opts) {
     if (!a.signature) return;
     return bscript.compile([a.signature]);
   });
-  lazy.prop(o, 'witness', () => {
-    if (!o.input) return;
-    return [];
-  });
   // extended validation
   if (opts.validate) {
     if (a.output) {

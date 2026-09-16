@@ -11,8 +11,7 @@
         "hash": "168b992bcfc44050310b3a94bd0771136d0b28d1",
         "output": "OP_DUP OP_HASH160 168b992bcfc44050310b3a94bd0771136d0b28d1 OP_EQUALVERIFY OP_CHECKSIG",
         "signature": null,
-        "input": null,
-        "witness": null
+        "input": null
       }
     },
     {
@@ -25,8 +24,7 @@
         "address": "134D6gYy8DsR5m4416BnmgASuMBqKvogQh",
         "output": "OP_DUP OP_HASH160 168b992bcfc44050310b3a94bd0771136d0b28d1 OP_EQUALVERIFY OP_CHECKSIG",
         "signature": null,
-        "input": null,
-        "witness": null
+        "input": null
       }
     },
     {
@@ -39,8 +37,7 @@
         "address": "134D6gYy8DsR5m4416BnmgASuMBqKvogQh",
         "hash": "168b992bcfc44050310b3a94bd0771136d0b28d1",
         "signature": null,
-        "input": null,
-        "witness": null
+        "input": null
       }
     },
     {
@@ -54,8 +51,7 @@
         "hash": "168b992bcfc44050310b3a94bd0771136d0b28d1",
         "output": "OP_DUP OP_HASH160 168b992bcfc44050310b3a94bd0771136d0b28d1 OP_EQUALVERIFY OP_CHECKSIG",
         "signature": null,
-        "input": null,
-        "witness": null
+        "input": null
       }
     },
     {
@@ -69,8 +65,7 @@
         "address": "134D6gYy8DsR5m4416BnmgASuMBqKvogQh",
         "hash": "168b992bcfc44050310b3a94bd0771136d0b28d1",
         "output": "OP_DUP OP_HASH160 168b992bcfc44050310b3a94bd0771136d0b28d1 OP_EQUALVERIFY OP_CHECKSIG",
-        "input": "300602010002010001 030000000000000000000000000000000000000000000000000000000000000001",
-        "witness": []
+        "input": "300602010002010001 030000000000000000000000000000000000000000000000000000000000000001"
       }
     },
     {
@@ -84,8 +79,7 @@
         "hash": "168b992bcfc44050310b3a94bd0771136d0b28d1",
         "output": "OP_DUP OP_HASH160 168b992bcfc44050310b3a94bd0771136d0b28d1 OP_EQUALVERIFY OP_CHECKSIG",
         "pubkey": "030000000000000000000000000000000000000000000000000000000000000001",
-        "signature": "300602010002010001",
-        "witness": []
+        "signature": "300602010002010001"
       }
     }
   ],
@@ -223,13 +217,39 @@
   ],
   "dynamic": {
     "depends": {
-      "address": [ "address", "output", "hash", "pubkey", "input" ],
-      "hash": [ "address", "output", "hash", "pubkey", "input" ],
-      "output": [ "address", "output", "hash", "pubkey", "input" ],
-      "pubkey": [ "input" ],
-      "signature": [ "input" ],
-      "input": [ [ "pubkey", "signature" ] ],
-      "witness": [ "input" ]
+      "address": [
+        "address",
+        "output",
+        "hash",
+        "pubkey",
+        "input"
+      ],
+      "hash": [
+        "address",
+        "output",
+        "hash",
+        "pubkey",
+        "input"
+      ],
+      "output": [
+        "address",
+        "output",
+        "hash",
+        "pubkey",
+        "input"
+      ],
+      "pubkey": [
+        "input"
+      ],
+      "signature": [
+        "input"
+      ],
+      "input": [
+        [
+          "pubkey",
+          "signature"
+        ]
+      ]
     },
     "details": [
       {
@@ -239,8 +259,7 @@
         "output": "OP_DUP OP_HASH160 168b992bcfc44050310b3a94bd0771136d0b28d1 OP_EQUALVERIFY OP_CHECKSIG",
         "pubkey": "030000000000000000000000000000000000000000000000000000000000000001",
         "signature": "300602010002010001",
-        "input": "300602010002010001 030000000000000000000000000000000000000000000000000000000000000001",
-        "witness": []
+        "input": "300602010002010001 030000000000000000000000000000000000000000000000000000000000000001"
       }
     ]
   }

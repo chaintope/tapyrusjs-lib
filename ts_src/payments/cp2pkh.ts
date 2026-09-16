@@ -78,10 +78,6 @@ export function cp2pkh(a: Payment, opts?: PaymentOpts): Payment {
     if (!a.signature) return;
     return bscript.compile([a.signature, a.pubkey]);
   });
-  lazy.prop(o, 'witness', () => {
-    if (!o.input) return;
-    return [];
-  });
   lazy.prop(o, 'colorId', () => {
     if (a.output) return a.output.slice(1, 34);
     if (a.address) return _address().colorId;

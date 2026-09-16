@@ -46,12 +46,6 @@ function equateBase(a: any, b: any, context: string): void {
     );
   if ('input' in b)
     t.strictEqual(tryASM(a.input), tryASM(b.input), `Inequal ${context}input`);
-  if ('witness' in b)
-    t.deepStrictEqual(
-      tryHex(a.witness),
-      tryHex(b.witness),
-      `Inequal ${context}witness`,
-    );
 }
 
 export function equate(a: any, b: any, args?: any): void {
@@ -61,11 +55,9 @@ export function equate(a: any, b: any, args?: any): void {
   // by null, we mean 'undefined', but JSON
   if (b.input === null) b.input = undefined;
   if (b.output === null) b.output = undefined;
-  if (b.witness === null) b.witness = undefined;
   if (b.redeem) {
     if (b.redeem.input === null) b.redeem.input = undefined;
     if (b.redeem.output === null) b.redeem.output = undefined;
-    if (b.redeem.witness === null) b.redeem.witness = undefined;
   }
 
   equateBase(a, b, '');
@@ -124,8 +116,6 @@ export function preform(x: any): any {
   }
   if (typeof x.output === 'string') x.output = asmToBuffer(x.output);
   if (typeof x.input === 'string') x.input = asmToBuffer(x.input);
-  if (Array.isArray(x.witness)) x.witness = x.witness.map(fromHex);
-
   if (x.data) x.data = x.data.map(fromHex);
   if (x.hash) x.hash = Buffer.from(x.hash, 'hex');
   if (x.colorId) x.colorId = Buffer.from(x.colorId, 'hex');
@@ -142,8 +132,6 @@ export function preform(x: any): any {
       x.redeem.input = asmToBuffer(x.redeem.input);
     if (typeof x.redeem.output === 'string')
       x.redeem.output = asmToBuffer(x.redeem.output);
-    if (Array.isArray(x.redeem.witness))
-      x.redeem.witness = x.redeem.witness.map(fromHex);
     if (x.redeem.network)
       x.redeem.network = (BNETWORKS as any)[x.redeem.network];
   }

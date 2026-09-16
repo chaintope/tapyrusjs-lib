@@ -3,7 +3,6 @@ Object.defineProperty(exports, '__esModule', { value: true });
 exports.types = void 0;
 exports.input = classifyInput;
 exports.output = classifyOutput;
-exports.witness = classifyWitness;
 const script_1 = require('./script');
 const coloredPubKeyHash = require('./templates/coloredpubkeyhash');
 const coloredScriptHash = require('./templates/coloredscripthash');
@@ -12,9 +11,6 @@ const nullData = require('./templates/nulldata');
 const pubKey = require('./templates/pubkey');
 const pubKeyHash = require('./templates/pubkeyhash');
 const scriptHash = require('./templates/scripthash');
-const witnessCommitment = require('./templates/witnesscommitment');
-const witnessPubKeyHash = require('./templates/witnesspubkeyhash');
-const witnessScriptHash = require('./templates/witnessscripthash');
 const types = {
   P2MS: 'multisig',
   NONSTANDARD: 'nonstandard',
@@ -22,16 +18,11 @@ const types = {
   P2PK: 'pubkey',
   P2PKH: 'pubkeyhash',
   P2SH: 'scripthash',
-  P2WPKH: 'witnesspubkeyhash',
-  P2WSH: 'witnessscripthash',
-  WITNESS_COMMITMENT: 'witnesscommitment',
   CP2PKH: 'coloredpubkeyhash',
   CP2SH: 'coloredscripthash',
 };
 exports.types = types;
 function classifyOutput(script) {
-  if (witnessPubKeyHash.output.check(script)) return types.P2WPKH;
-  if (witnessScriptHash.output.check(script)) return types.P2WSH;
   if (pubKeyHash.output.check(script)) return types.P2PKH;
   if (scriptHash.output.check(script)) return types.P2SH;
   if (coloredPubKeyHash.output.check(script)) return types.CP2PKH;
@@ -41,7 +32,6 @@ function classifyOutput(script) {
   if (!chunks) throw new TypeError('Invalid script');
   if (multisig.output.check(chunks)) return types.P2MS;
   if (pubKey.output.check(chunks)) return types.P2PK;
-  if (witnessCommitment.output.check(chunks)) return types.WITNESS_COMMITMENT;
   if (nullData.output.check(chunks)) return types.NULLDATA;
   return types.NONSTANDARD;
 }
@@ -53,14 +43,5 @@ function classifyInput(script, allowIncomplete) {
   if (scriptHash.input.check(chunks, allowIncomplete)) return types.P2SH;
   if (multisig.input.check(chunks, allowIncomplete)) return types.P2MS;
   if (pubKey.input.check(chunks)) return types.P2PK;
-  return types.NONSTANDARD;
-}
-function classifyWitness(script, allowIncomplete) {
-  // XXX: optimization, below functions .decompile before use
-  const chunks = (0, script_1.decompile)(script);
-  if (!chunks) throw new TypeError('Invalid script');
-  if (witnessPubKeyHash.input.check(chunks)) return types.P2WPKH;
-  if (witnessScriptHash.input.check(chunks, allowIncomplete))
-    return types.P2WSH;
   return types.NONSTANDARD;
 }
