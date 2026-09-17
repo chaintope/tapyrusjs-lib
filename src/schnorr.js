@@ -20,28 +20,20 @@ exports.verify = verify;
 const bcrypto = require('./crypto');
 const types = require('./types');
 const createHmac = require('create-hmac');
+const ecc = require('tiny-secp256k1');
 const typeforce = require('typeforce');
 const ZERO = BigInt(0);
 const ONE = BigInt(1);
 const TWO = BigInt(2);
-const THREE = BigInt(3);
-const SEVEN = BigInt(7);
-const FOUR = BigInt(4);
+const EIGHT = BigInt(8);
 const P = BigInt(
   '0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f',
 );
 const N = BigInt(
   '0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141',
 );
-const GX = BigInt(
-  '0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
-);
-const GY = BigInt(
-  '0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8',
-);
 // "SCHNORR + SHA256" is exactly 16 ASCII bytes, so no padding is needed.
 const ALGO16 = Buffer.from('SCHNORR + SHA256', 'ascii');
-const G = { x: GX, y: GY };
 function mod(a, m) {
   const r = a % m;
   return r < ZERO ? r + m : r;
@@ -57,36 +49,12 @@ function powmod(base, exponent, m) {
   }
   return result;
 }
-// p is prime, so a^(p-2) is the modular inverse of a.
-function inv(a, m) {
-  return powmod(a, m - TWO, m);
-}
-function pointAdd(a, b) {
-  if (a === null) return b;
-  if (b === null) return a;
-  if (a.x === b.x && mod(a.y + b.y, P) === ZERO) return null;
-  let lam;
-  if (a.x === b.x && a.y === b.y) {
-    lam = mod(THREE * a.x * a.x * inv(TWO * a.y, P), P);
-  } else {
-    lam = mod((b.y - a.y) * inv(mod(b.x - a.x, P), P), P);
-  }
-  const x = mod(lam * lam - a.x - b.x, P);
-  return { x, y: mod(lam * (a.x - x) - a.y, P) };
-}
-function pointMul(k, point) {
-  let result = null;
-  let addend = point;
-  let e = k;
-  while (e > ZERO) {
-    if (e & ONE) result = pointAdd(result, addend);
-    addend = pointAdd(addend, addend);
-    e >>= ONE;
-  }
-  return result;
-}
+// Builds the integer byte by byte rather than through a hex string, so that no
+// copy of a secret ends up in a string, which can not be wiped.
 function bufferToBigInt(buffer) {
-  return BigInt('0x' + (buffer.toString('hex') || '0'));
+  let result = ZERO;
+  for (const byte of buffer) result = (result << EIGHT) | BigInt(byte);
+  return result;
 }
 function bigIntToBuffer32(value) {
   return Buffer.from(value.toString(16).padStart(64, '0'), 'hex');
@@ -94,66 +62,44 @@ function bigIntToBuffer32(value) {
 function isQuadraticResidue(y) {
   return powmod(y, (P - ONE) / TWO, P) === ONE;
 }
-function compress(point) {
-  return Buffer.concat([
-    Buffer.from([point.y & ONE ? 0x03 : 0x02]),
-    bigIntToBuffer32(point.x),
-  ]);
+/** The x coordinate of an uncompressed point, as returned by tiny-secp256k1. */
+function pointX(point) {
+  return Buffer.from(point.slice(1, 33));
 }
-function isOnCurve(x, y) {
-  return mod(y * y, P) === mod(powmod(x, THREE, P) + SEVEN, P);
-}
-// Accepts a 33-byte compressed or a 65-byte uncompressed public key.
-function decodePoint(publicKey) {
-  if (publicKey.length === 65) {
-    if (publicKey[0] !== 0x04) throw new Error('Invalid public key prefix');
-    const px = bufferToBigInt(publicKey.subarray(1, 33));
-    const py = bufferToBigInt(publicKey.subarray(33, 65));
-    // An uncompressed key states both coordinates, so unlike the compressed
-    // form nothing forces the pair onto the curve. A point of another curve
-    // takes the group law used here outside secp256k1, where a signature can
-    // be forged: (0, 0) doubles to the point at infinity, which cancels the
-    // public key out of the verification equation altogether.
-    if (px >= P || py >= P || !isOnCurve(px, py))
-      throw new Error('Invalid public key');
-    return { x: px, y: py };
-  }
-  if (
-    publicKey.length !== 33 ||
-    (publicKey[0] !== 0x02 && publicKey[0] !== 0x03)
-  )
-    throw new Error('Invalid public key');
-  const x = bufferToBigInt(publicKey.subarray(1));
-  if (x >= P) throw new Error('Invalid public key');
-  const ySquare = mod(powmod(x, THREE, P) + SEVEN, P);
-  let y = powmod(ySquare, (P + ONE) / FOUR, P);
-  if (mod(y * y, P) !== ySquare) throw new Error('Invalid public key');
-  if ((y & ONE) !== BigInt(publicKey[0] & 1)) y = P - y;
-  return { x, y };
+/** The y coordinate of an uncompressed point. */
+function pointY(point) {
+  return bufferToBigInt(Buffer.from(point.slice(33)));
 }
 // libsecp256k1's nonce_function_rfc6979 with keydata = key32 || msg32 || algo16.
+// Returns the nonce as 32 bytes, so that it can be handed to the constant time
+// scalar operations without passing through a bigint.
 function rfc6979Nonce(privateKey, hash) {
   const keydata = Buffer.concat([privateKey, hash, ALGO16]);
   let v = Buffer.alloc(32, 0x01);
   let k = Buffer.alloc(32, 0x00);
-  k = createHmac('sha256', k)
-    .update(Buffer.concat([v, Buffer.from([0x00]), keydata]))
-    .digest();
-  v = createHmac('sha256', k)
-    .update(v)
-    .digest();
-  k = createHmac('sha256', k)
-    .update(Buffer.concat([v, Buffer.from([0x01]), keydata]))
-    .digest();
-  v = createHmac('sha256', k)
-    .update(v)
-    .digest();
+  try {
+    k = createHmac('sha256', k)
+      .update(Buffer.concat([v, Buffer.from([0x00]), keydata]))
+      .digest();
+    v = createHmac('sha256', k)
+      .update(v)
+      .digest();
+    k = createHmac('sha256', k)
+      .update(Buffer.concat([v, Buffer.from([0x01]), keydata]))
+      .digest();
+    v = createHmac('sha256', k)
+      .update(v)
+      .digest();
+  } finally {
+    // keydata holds a copy of the private key
+    keydata.fill(0);
+  }
   for (;;) {
     v = createHmac('sha256', k)
       .update(v)
       .digest();
-    const candidate = bufferToBigInt(v);
-    if (candidate > ZERO && candidate < N) return candidate;
+    // isPrivate is the same 0 < v < n test, without building a bigint
+    if (ecc.isPrivate(v)) return v;
     k = createHmac('sha256', k)
       .update(Buffer.concat([v, Buffer.from([0x00])]))
       .digest();
@@ -172,24 +118,35 @@ function challenge(rx, compressedPubkey, hash) {
  * Sign a 32-byte hash. Returns the 64-byte signature Rx || s.
  * The 1-byte sighash flag is not appended; the caller adds it where the
  * script or the PSTT format requires it.
+ *
+ * Every operation on the private key or on the nonce is delegated to
+ * tiny-secp256k1, which wraps libsecp256k1 and runs in constant time. The one
+ * exception is the product e*d, which has no constant time equivalent in that
+ * library; it is a single modular multiplication rather than a bit by bit
+ * scalar multiplication.
  */
 function sign(privateKey, hash) {
   typeforce(types.tuple(types.BufferN(32), types.Hash256bit), arguments);
-  const d = bufferToBigInt(privateKey);
-  if (d <= ZERO || d >= N) throw new Error('Invalid private key');
-  const publicKey = pointMul(d, G);
-  if (publicKey === null) throw new Error('Invalid private key');
+  if (!ecc.isPrivate(privateKey)) throw new Error('Invalid private key');
+  const compressedPubkey = Buffer.from(ecc.pointFromScalar(privateKey, true));
   let k = rfc6979Nonce(privateKey, hash);
-  const r = pointMul(k, G);
+  const r = ecc.pointFromScalar(k, false);
   if (r === null) throw new Error('Invalid nonce');
-  if (!isQuadraticResidue(r.y)) k = N - k;
-  const rx = bigIntToBuffer32(r.x);
-  const e = challenge(rx, compress(publicKey), hash);
-  return Buffer.concat([rx, bigIntToBuffer32(mod(k + e * d, N))]);
+  const rx = pointX(r);
+  // flip the nonce so that R.y is a quadratic residue
+  if (!isQuadraticResidue(pointY(r))) k = Buffer.from(ecc.privateNegate(k));
+  const e = challenge(rx, compressedPubkey, hash);
+  const ed = bigIntToBuffer32(mod(e * bufferToBigInt(privateKey), N));
+  const s = ecc.privateAdd(k, ed);
+  if (s === null) throw new Error('Invalid signature');
+  return Buffer.concat([rx, Buffer.from(s)]);
 }
 /**
  * Verify a 64-byte signature (Rx || s) against a 32-byte hash by computing
  * R' = sG - eP and checking that R'.y is a quadratic residue and R'.x == Rx.
+ *
+ * Accepts a 33-byte compressed or a 65-byte uncompressed public key. The point
+ * is parsed by libsecp256k1, which rejects a pair that is not on the curve.
  */
 function verify(publicKey, hash, signature) {
   typeforce(
@@ -197,17 +154,29 @@ function verify(publicKey, hash, signature) {
     arguments,
   );
   if (signature.length !== 64) return false;
-  const r = bufferToBigInt(signature.subarray(0, 32));
+  const rx = signature.subarray(0, 32);
+  const r = bufferToBigInt(rx);
   const s = bufferToBigInt(signature.subarray(32));
   if (r >= P || s >= N) return false;
-  let point;
-  try {
-    point = decodePoint(publicKey);
-  } catch (e) {
-    return false;
-  }
-  const e = challenge(signature.subarray(0, 32), compress(point), hash);
-  const computed = pointAdd(pointMul(s, G), pointMul(mod(N - e, N), point));
+  if (!ecc.isPoint(publicKey)) return false;
+  const compressedPubkey = Buffer.from(ecc.pointCompress(publicKey, true));
+  const e = challenge(rx, compressedPubkey, hash);
+  const negE = mod(N - e, N);
+  // a zero scalar would multiply to the point at infinity, which
+  // tiny-secp256k1 does not accept as a tweak
+  const sG =
+    s === ZERO ? null : ecc.pointFromScalar(bigIntToBuffer32(s), false);
+  const eP =
+    negE === ZERO
+      ? null
+      : ecc.pointMultiply(publicKey, bigIntToBuffer32(negE), false);
+  let computed;
+  if (sG === null) computed = eP;
+  else if (eP === null) computed = sG;
+  else computed = ecc.pointAdd(sG, eP, false);
   if (computed === null) return false;
-  return isQuadraticResidue(computed.y) && computed.x === r;
+  return (
+    isQuadraticResidue(pointY(computed)) &&
+    bufferToBigInt(pointX(computed)) === r
+  );
 }
