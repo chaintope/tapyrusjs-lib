@@ -72,12 +72,11 @@ class Psbt {
     const psbtBase = bip174_1.Psbt.fromBuffer(buffer, transactionFromBuffer);
     const psbt = new Psbt(opts, psbtBase);
     checkTxForDupeIns(psbt.__CACHE.__TX, psbt.__CACHE);
-    psbtBase.inputs.forEach(input => checkNoWitnessFields(input, 'input'));
-    psbtBase.outputs.forEach(output => checkNoWitnessFields(output, 'output'));
     return psbt;
   }
   constructor(opts = {}, data = new bip174_1.Psbt(new PsbtTransaction())) {
     this.data = data;
+    checkNoWitnessFieldsInData(data);
     // set defaults
     this.opts = Object.assign({}, DEFAULT_OPTS, opts);
     this.__CACHE = {
@@ -135,6 +134,7 @@ class Psbt {
     });
   }
   combine(...those) {
+    those.forEach(o => checkNoWitnessFieldsInData(o.data));
     this.data.combine(...those.map(o => o.data));
     return this;
   }
@@ -267,6 +267,7 @@ class Psbt {
   }
   finalizeInput(inputIndex, finalScriptsFunc = getFinalScripts) {
     const input = (0, utils_1.checkForInput)(this.data.inputs, inputIndex);
+    checkNoWitnessFields(input, 'input');
     const { script, isP2SH } = getScriptFromInput(
       inputIndex,
       input,
@@ -802,6 +803,10 @@ function checkNoWitnessFields(data, ioType) {
     }
   });
 }
+function checkNoWitnessFieldsInData(data) {
+  data.inputs.forEach(input => checkNoWitnessFields(input, 'input'));
+  data.outputs.forEach(output => checkNoWitnessFields(output, 'output'));
+}
 function checkTxEmpty(tx) {
   const isEmpty = tx.ins.every(
     input => input.script && input.script.length === 0,
@@ -888,6 +893,7 @@ function getHashAndSighashType(
   };
 }
 function getHashForSig(inputIndex, input, cache, sighashTypes) {
+  checkNoWitnessFields(input, 'input');
   const unsignedTx = cache.__TX;
   const sighashType =
     input.sighashType || transaction_1.Transaction.SIGHASH_ALL;

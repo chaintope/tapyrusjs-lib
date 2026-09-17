@@ -805,6 +805,77 @@ describe(`Psbt`, () => {
         psbt.updateOutput(0, { witnessScript: Buffer.from([0x51]) } as any);
       }, new RegExp('witnessScript is not supported for output'));
     });
+
+    it('rejects a PsbtBase with witness fields given to the constructor', () => {
+      const psbt = new Psbt();
+      psbt.addInput({ hash: prevTx.getHash(), index: 0 });
+      psbt.data.inputs[0].witnessUtxo = {
+        script: Buffer.from([0x51]),
+        value: 1337,
+      };
+
+      assert.throws(() => {
+        return new Psbt({}, psbt.data);
+      }, new RegExp('witnessUtxo is not supported for input'));
+    });
+
+    it('rejects a psbt with witness fields on combine', () => {
+      const into = new Psbt();
+      into.addInput({ hash: prevTx.getHash(), index: 0 });
+      const from = new Psbt();
+      from.addInput({ hash: prevTx.getHash(), index: 0 });
+      from.data.inputs[0].witnessScript = Buffer.from([0x51]);
+
+      assert.throws(() => {
+        into.combine(from);
+      }, new RegExp('witnessScript is not supported for input'));
+      assert.strictEqual(into.data.inputs[0].witnessScript, undefined);
+    });
+
+    it('rejects witness fields set through data on signing', () => {
+      const keyPair = ECPair.makeRandom();
+      const script = payments.p2pkh({ pubkey: keyPair.publicKey }).output!;
+      const utxoTx = new Transaction();
+      utxoTx.addInput(Buffer.alloc(32, 1), 0);
+      utxoTx.addOutput(script, 2e5);
+
+      const psbt = new Psbt();
+      psbt
+        .addInput({
+          hash: utxoTx.getHash(),
+          index: 0,
+          nonWitnessUtxo: utxoTx.toBuffer(),
+        })
+        .addOutput({ script, value: 1e5 });
+      psbt.data.inputs[0].witnessScript = Buffer.from([0x51]);
+
+      assert.throws(() => {
+        psbt.signInput(0, keyPair);
+      }, new RegExp('witnessScript is not supported for input'));
+    });
+
+    it('rejects witness fields set through data on finalize', () => {
+      const keyPair = ECPair.makeRandom();
+      const script = payments.p2pkh({ pubkey: keyPair.publicKey }).output!;
+      const utxoTx = new Transaction();
+      utxoTx.addInput(Buffer.alloc(32, 1), 0);
+      utxoTx.addOutput(script, 2e5);
+
+      const psbt = new Psbt();
+      psbt
+        .addInput({
+          hash: utxoTx.getHash(),
+          index: 0,
+          nonWitnessUtxo: utxoTx.toBuffer(),
+        })
+        .addOutput({ script, value: 1e5 });
+      psbt.signInput(0, keyPair);
+      psbt.data.inputs[0].witnessScript = Buffer.from([0x51]);
+
+      assert.throws(() => {
+        psbt.finalizeInput(0);
+      }, new RegExp('witnessScript is not supported for input'));
+    });
   });
 
   describe('clone', () => {
