@@ -27,7 +27,10 @@ function fromBase58Check(address) {
     const colorId = payload.slice(1, 1 + COLOR_ID_LENGTH);
     const hash = payload.slice(1 + COLOR_ID_LENGTH);
     if (hash.length !== PUBKEY_HASH_LENGTH) {
-      throw new TypeError(`Invalid hash(${hash})`);
+      throw new TypeError(`Invalid hash(${hash.toString('hex')})`);
+    }
+    if (!types.ColorId(colorId)) {
+      throw new TypeError(`${address} has an invalid color identifier`);
     }
     return { version, colorId, hash };
   } else {
@@ -37,10 +40,13 @@ function fromBase58Check(address) {
   }
 }
 function toBase58Check(hash, version, colorId) {
-  typeforce(types.tuple(types.Hash160bit, types.UInt8), arguments);
+  typeforce(
+    types.tuple(types.Hash160bit, types.UInt8, types.maybe(types.ColorId)),
+    arguments,
+  );
   const payload = colorId
-    ? Buffer.allocUnsafe(COLORED_LENGTH)
-    : Buffer.allocUnsafe(UNCOLORED_LENGTH);
+    ? Buffer.alloc(COLORED_LENGTH)
+    : Buffer.alloc(UNCOLORED_LENGTH);
   payload.writeUInt8(version, 0);
   if (colorId) {
     colorId.copy(payload, 1);
@@ -57,6 +63,10 @@ function fromOutputScript(output, network) {
   } catch (e) {}
   throw new Error(bscript.toASM(output) + ' has no matching Address');
 }
+function requireOutput(payment, address) {
+  if (!payment.output) throw new Error(address + ' has no matching Script');
+  return payment.output;
+}
 function toOutputScript(address, network) {
   network = network || networks.prod;
   let decodeBase58;
@@ -64,20 +74,23 @@ function toOutputScript(address, network) {
     decodeBase58 = fromBase58Check(address);
   } catch (e) {}
   if (decodeBase58) {
-    if (decodeBase58.version === network.pubKeyHash)
-      return payments.p2pkh({ hash: decodeBase58.hash }).output;
-    if (decodeBase58.version === network.scriptHash)
-      return payments.p2sh({ hash: decodeBase58.hash }).output;
-    if (decodeBase58.version === network.coloredPubKeyHash)
-      return payments.cp2pkh({
-        hash: decodeBase58.hash,
-        colorId: decodeBase58.colorId,
-      }).output;
-    if (decodeBase58.version === network.coloredScriptHash)
-      return payments.cp2sh({
-        hash: decodeBase58.hash,
-        colorId: decodeBase58.colorId,
-      }).output;
+    const { version, hash, colorId } = decodeBase58;
+    const colored =
+      version === network.coloredPubKeyHash ||
+      version === network.coloredScriptHash;
+    // the version byte and the payload must agree on whether there is a colour
+    if (colored && !colorId)
+      throw new Error(address + ' is missing a color identifier');
+    if (!colored && colorId)
+      throw new Error(address + ' has an unexpected color identifier');
+    if (version === network.pubKeyHash)
+      return requireOutput(payments.p2pkh({ hash }), address);
+    if (version === network.scriptHash)
+      return requireOutput(payments.p2sh({ hash }), address);
+    if (version === network.coloredPubKeyHash)
+      return requireOutput(payments.cp2pkh({ hash, colorId }), address);
+    if (version === network.coloredScriptHash)
+      return requireOutput(payments.cp2sh({ hash, colorId }), address);
   }
   throw new Error(address + ' has no matching Script');
 }

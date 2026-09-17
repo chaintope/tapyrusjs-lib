@@ -150,6 +150,14 @@
       {
         "exception": "has no matching Script",
         "address": "bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3"
+      },
+      {
+        "exception": "is missing a color identifier",
+        "address": "RtqvBaudCALQXgZRiRUT8kuYCsjxPFk8P"
+      },
+      {
+        "exception": "has an unexpected color identifier",
+        "address": "1QKpvPFQdF6prcxQ2r1mWmEmcu57EpPFkLtrtCeQkDACwh5UCD35p6DtXLsZ1aw4WGKfroJuHVJ6pmN"
       }
     ]
   }

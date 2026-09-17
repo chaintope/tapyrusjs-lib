@@ -20,6 +20,37 @@ export function Signer(obj: any): boolean {
   );
 }
 
+/**
+ * A Tapyrus colour identifier: one token type byte followed by a 32 byte
+ * payload. tapyrus-core rejects any other type byte, and rejects an all-zero
+ * payload, both when decoding an address and when executing OP_COLOR.
+ */
+export const COLOR_ID_REISSUABLE = 0xc1;
+export const COLOR_ID_NON_REISSUABLE = 0xc2;
+export const COLOR_ID_NFT = 0xc3;
+
+const COLOR_ID_LENGTH = 33;
+const COLOR_ID_TYPES = [
+  COLOR_ID_REISSUABLE,
+  COLOR_ID_NON_REISSUABLE,
+  COLOR_ID_NFT,
+];
+
+function isBuffer(value: unknown): value is Buffer {
+  return typeforce.Buffer(value);
+}
+
+export function ColorId(value: unknown): boolean {
+  if (!isBuffer(value)) return false;
+  if (value.length !== COLOR_ID_LENGTH) return false;
+  if (COLOR_ID_TYPES.indexOf(value[0]) < 0) return false;
+  // an all-zero payload is not a colour: SCRIPT_ERR_OP_COLORID_INVALID
+  return value.slice(1).some(byte => byte !== 0);
+}
+ColorId.toJSON = (): string => {
+  return 'color identifier';
+};
+
 const SATOSHI_MAX: number = 21 * 1e14;
 export function Satoshi(value: number): boolean {
   return typeforce.UInt53(value) && value <= SATOSHI_MAX;
