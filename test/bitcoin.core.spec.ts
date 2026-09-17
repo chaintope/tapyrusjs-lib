@@ -5,7 +5,6 @@ import * as bitcoin from '..';
 import * as base58EncodeDecode from './fixtures/core/base58_encode_decode.json';
 import * as base58KeysInvalid from './fixtures/core/base58_keys_invalid.json';
 import * as base58KeysValid from './fixtures/core/base58_keys_valid.json';
-import * as blocksValid from './fixtures/core/blocks.json';
 import * as sigCanonical from './fixtures/core/sig_canonical.json';
 import * as sigNoncanonical from './fixtures/core/sig_noncanonical.json';
 import * as sigHash from './fixtures/core/sighash.json';
@@ -127,17 +126,6 @@ describe('Bitcoin-core', () => {
         assert.throws(() => {
           bitcoin.ECPair.fromWIF(strng, allowedNetworks);
         }, /(Invalid|Unknown) (checksum|compression flag|network version|WIF length)/);
-      });
-    });
-  });
-
-  describe('Block.fromHex', () => {
-    blocksValid.forEach(f => {
-      it('can parse ' + f.id, () => {
-        const block = bitcoin.Block.fromHex(f.hex);
-
-        assert.strictEqual(block.getId(), f.id);
-        assert.strictEqual(block.transactions!.length, f.transactions);
       });
     });
   });

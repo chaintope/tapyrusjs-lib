@@ -5,45 +5,32 @@ import { Block } from '..';
 import * as fixtures from './fixtures/block.json';
 
 describe('Block', () => {
-  describe('version', () => {
-    it('should be interpreted as an int32le', () => {
-      const blockHex =
-        'ffffffff000000000000000000000000000000000000000000000000000000000000' +
-        '00004141414141414141414141414141414141414141414141414141414141414141' +
-        '01000000020000000300000000';
-      const block = Block.fromHex(blockHex);
-      assert.strictEqual(-1, block.version);
-      assert.strictEqual(1, block.timestamp);
-    });
-  });
-
-  describe('calculateTarget', () => {
-    fixtures.targets.forEach(f => {
-      it('returns ' + f.expected + ' for 0x' + f.bits, () => {
-        const bits = parseInt(f.bits, 16);
-
-        assert.strictEqual(
-          Block.calculateTarget(bits).toString('hex'),
-          f.expected,
-        );
-      });
-    });
-  });
-
   describe('fromBuffer/fromHex', () => {
     fixtures.valid.forEach(f => {
       it('imports ' + f.description, () => {
         const block = Block.fromHex(f.hex);
 
-        assert.strictEqual(block.version, f.version);
+        assert.strictEqual(block.features, f.features);
         assert.strictEqual(block.prevHash!.toString('hex'), f.prevHash);
         assert.strictEqual(block.merkleRoot!.toString('hex'), f.merkleRoot);
+        assert.strictEqual(block.imMerkleRoot!.toString('hex'), f.imMerkleRoot);
         assert.strictEqual(block.timestamp, f.timestamp);
-        assert.strictEqual(block.bits, f.bits);
-        assert.strictEqual(block.nonce, f.nonce);
-        assert.strictEqual(!block.transactions, f.hex.length === 160);
+        assert.strictEqual(block.xfield.type, f.xfieldType);
+        assert.strictEqual(block.proof.toString('hex'), f.proof);
+        assert.strictEqual(block.transactions!.length, f.transactions);
+        assert.strictEqual(block.byteLength(true), f.headerLength);
         assert.strictEqual(block.byteLength(false), f.hex.length / 2);
       });
+    });
+
+    it('reads the aggregate public key of an xfield', () => {
+      const f = fixtures.valid.find(x => x.xfieldType === 1)!;
+      const block = Block.fromHex(f.hex);
+
+      assert.strictEqual(
+        block.xfield.aggregatePubkey!.toString('hex'),
+        f.aggregatePubkey,
+      );
     });
 
     fixtures.invalid.forEach(f => {
@@ -64,7 +51,10 @@ describe('Block', () => {
       });
 
       it('exports ' + f.description, () => {
-        assert.strictEqual(block.toHex(true), f.hex.slice(0, 160));
+        assert.strictEqual(
+          block.toHex(true),
+          f.hex.slice(0, f.headerLength * 2),
+        );
         assert.strictEqual(block.toHex(), f.hex);
       });
     });
@@ -72,31 +62,36 @@ describe('Block', () => {
 
   describe('getHash/getId', () => {
     fixtures.valid.forEach(f => {
-      let block: Block;
-
-      beforeEach(() => {
-        block = Block.fromHex(f.hex);
-      });
-
       it('returns ' + f.id + ' for ' + f.description, () => {
+        const block = Block.fromHex(f.hex);
+
         assert.strictEqual(block.getHash().toString('hex'), f.hash);
         assert.strictEqual(block.getId(), f.id);
       });
     });
   });
 
+  describe('getHashForSign', () => {
+    fixtures.valid.forEach(f => {
+      it('excludes the proof for ' + f.id, () => {
+        const block = Block.fromHex(f.hex);
+
+        assert.strictEqual(
+          block.getHashForSign().toString('hex'),
+          f.hashForSign,
+        );
+        // the proof is what makes the two hashes differ
+        assert.notStrictEqual(f.hashForSign, f.hash);
+      });
+    });
+  });
+
   describe('getUTCDate', () => {
     fixtures.valid.forEach(f => {
-      let block: Block;
-
-      beforeEach(() => {
-        block = Block.fromHex(f.hex);
-      });
-
       it('returns UTC date of ' + f.id, () => {
-        const utcDate = block.getUTCDate().getTime();
+        const block = Block.fromHex(f.hex);
 
-        assert.strictEqual(utcDate, f.timestamp * 1e3);
+        assert.strictEqual(block.getUTCDate().getTime(), f.timestamp * 1e3);
       });
     });
   });
@@ -106,53 +101,89 @@ describe('Block', () => {
       assert.throws(() => {
         Block.calculateMerkleRoot([]);
       }, /Cannot compute merkle root for zero transactions/);
+
+      assert.throws(() => {
+        Block.calculateImMerkleRoot([]);
+      }, /Cannot compute merkle root for zero transactions/);
     });
 
     fixtures.valid.forEach(f => {
-      if (f.hex.length === 160) return;
-
       let block: Block;
 
       beforeEach(() => {
         block = Block.fromHex(f.hex);
       });
 
-      it('returns ' + f.merkleRoot + ' for ' + f.id, () => {
+      it('returns both roots for ' + f.id, () => {
         assert.strictEqual(
           Block.calculateMerkleRoot(block.transactions!).toString('hex'),
           f.merkleRoot,
+        );
+        assert.strictEqual(
+          Block.calculateImMerkleRoot(block.transactions!).toString('hex'),
+          f.imMerkleRoot,
         );
       });
     });
   });
 
-  describe('checkTxRoots', () => {
+  describe('checkMerkleRoot', () => {
     fixtures.valid.forEach(f => {
-      if (f.hex.length === 160) return;
+      it('returns true for ' + f.id, () => {
+        const block = Block.fromHex(f.hex);
 
-      let block: Block;
-
-      beforeEach(() => {
-        block = Block.fromHex(f.hex);
+        assert.strictEqual(block.checkMerkleRoot(), true);
       });
+    });
 
-      it('returns ' + f.valid + ' for ' + f.id, () => {
-        assert.strictEqual(block.checkTxRoots(), true);
-      });
+    it('returns false when a root does not match', () => {
+      const block = Block.fromHex(fixtures.valid[0].hex);
+      block.imMerkleRoot = Buffer.alloc(32, 0xff);
+
+      assert.strictEqual(block.checkMerkleRoot(), false);
     });
   });
 
-  describe('checkProofOfWork', () => {
-    fixtures.valid.forEach(f => {
-      let block: Block;
+  describe('checkProof', () => {
+    // the genesis block carries the aggregate public key it is signed with
+    const f = fixtures.valid.find(x => x.aggregatePubkey)!;
+    const aggregatePubkey = Buffer.from(f.aggregatePubkey!, 'hex');
 
-      beforeEach(() => {
-        block = Block.fromHex(f.hex);
-      });
+    it('accepts the signature of ' + f.id, () => {
+      const block = Block.fromHex(f.hex);
 
-      it('returns ' + f.valid + ' for ' + f.id, () => {
-        assert.strictEqual(block.checkProofOfWork(), f.valid);
-      });
+      assert.strictEqual(block.checkProof(aggregatePubkey), true);
+    });
+
+    it('rejects the signature under another key', () => {
+      const block = Block.fromHex(f.hex);
+      const other = Buffer.from(
+        '02bb8a7fbba7da4e6a0519296e30211c33c7307ac19aba4e8f56cce2d3da36b751',
+        'hex',
+      );
+
+      assert.strictEqual(block.checkProof(other), false);
+    });
+
+    it('rejects a proof of the wrong length', () => {
+      const block = Block.fromHex(f.hex);
+      block.proof = block.proof.slice(0, 63);
+
+      assert.strictEqual(block.checkProof(aggregatePubkey), false);
+    });
+
+    it('rejects a features value other than 1', () => {
+      const block = Block.fromHex(f.hex);
+      block.features = 2;
+
+      assert.strictEqual(block.checkProof(aggregatePubkey), false);
+    });
+
+    it('rejects a tampered header', () => {
+      const block = Block.fromHex(f.hex);
+      block.timestamp += 1;
+
+      assert.strictEqual(block.checkProof(aggregatePubkey), false);
     });
   });
 });

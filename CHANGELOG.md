@@ -1,3 +1,46 @@
+# 0.8.0
+__removed__
+- SegWit is not part of Tapyrus, so everything supporting it is gone:
+  `payments.p2wpkh`, `payments.p2wsh`, `address.fromBech32`, `address.toBech32`,
+  `Bech32Result`, `Network.bech32`, `classify.witness`, the `P2WPKH`, `P2WSH`
+  and `WITNESS_COMMITMENT` script types, the `witness*` script templates,
+  `Transaction.weight()`, `Transaction.virtualSize()`, `Transaction.setWitness()`,
+  `Transaction.hashForWitnessV0()`, `Input.witness`, `Payment.witness`, and
+  `BufferReader.readVector` / `BufferWriter.writeVector`.
+- `TransactionBuilder.sign()` no longer takes `witnessValue` or `witnessScript`.
+- `Psbt` rejects `witnessUtxo`, `witnessScript` and `finalScriptWitness`.
+- `Block.calculateTarget()` and `Block.checkProofOfWork()`: Tapyrus blocks are
+  signed, not mined.
+- The `bech32` dependency.
+
+__changed__
+- `Transaction.byteLength()` lost its `_ALLOW_WITNESS` parameter; the remaining
+  parameter is `mulFix`.
+- `TransactionBuilder.addInput()` refers to the outpoint by the Tapyrus txid
+  (hashMalFix), which omits the scriptSig. It used the scriptSig-inclusive hash
+  before, which produced transactions spending an outpoint that does not exist.
+- `TransactionBuilder` signs a `cp2sh` input when the previous output script is
+  known, and refuses to sign a coloured input whose previous output script was
+  only guessed from a scriptSig.
+- The absurd-fee check ignores coloured inputs and outputs, which carry a token
+  amount rather than TPC, and no longer truncates input values to 32 bits.
+- A colour identifier is checked wherever one is accepted: 33 bytes, a type byte
+  of 0xc1, 0xc2 or 0xc3, and a payload that is not all zero. `address.toBase58Check`
+  no longer copies uninitialised memory into an address.
+- `address.toOutputScript()` rejects an address whose version byte and payload
+  disagree about carrying a colour.
+- `Block` follows the Tapyrus header: `features`, `prevHash`, `merkleRoot`,
+  `imMerkleRoot`, `timestamp`, `xfield` and `proof`. `checkTxRoots()` became
+  `checkMerkleRoot()` and verifies both roots; `getHashForSign()` and
+  `checkProof(aggregatePubkey)` are new; `version`, `bits` and `nonce` are gone.
+
+__added__
+- `Transaction.getMalFixHash()`, the hash an outpoint refers to.
+- `Block.calculateImMerkleRoot()`, `Block.getHashForSign()`, `Block.checkProof()`,
+  and the `XField` / `XFieldType` types.
+- `types.ColorId` and the `COLOR_ID_*` constants.
+- `scripts/check.sh`, which runs build, lint and the unit tests.
+
 # 5.2.0
 __changed__
 - Updated PSBT to allow for witnessUtxo and nonWitnessUtxo simultaneously (Re: segwit psbt bug) (#1563)

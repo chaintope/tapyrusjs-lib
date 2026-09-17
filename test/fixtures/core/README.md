@@ -20,6 +20,11 @@ Missing core test data includes:
 * `script*.json`
 	Bitcoin-js can not evaluate Scripts, making testing this irrelevant.
 
+* `blocks.json`
+	A Tapyrus block header has a different shape from a Bitcoin one, so these
+	vectors can not be parsed. Tapyrus blocks are tested in
+	`test/fixtures/block.json` instead.
+
 
 License
 --------
