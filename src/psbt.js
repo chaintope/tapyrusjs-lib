@@ -1099,6 +1099,10 @@ function inputFinalizeGetAmts(inputs, tx, cache, mustFinalize) {
       const vout = tx.ins[idx].index;
       const out = nwTx.outs[vout];
       inputAmount += out.value;
+    } else {
+      // 入力の金額が分からないと手数料を計算できない。
+      // 黙って 0 として集計すると手数料の判定が狂う。
+      throw new Error(`Need a Utxo input item for input #${idx}`);
     }
   });
   const outputAmount = tx.outs.reduce((total, o) => total + o.value, 0);

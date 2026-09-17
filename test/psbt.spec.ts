@@ -878,6 +878,24 @@ describe(`Psbt`, () => {
     });
   });
 
+  describe('extractTransaction', () => {
+    it('throws if an input has no utxo to take its value from', () => {
+      const utxoTx = new Transaction();
+      utxoTx.addInput(Buffer.alloc(32, 1), 0);
+      utxoTx.addOutput(Buffer.from([0x51]), 2e5);
+
+      const psbt = new Psbt();
+      psbt
+        .addInput({ hash: utxoTx.getHash(), index: 0 })
+        .addOutput({ script: Buffer.from([0x51]), value: 1e5 });
+      psbt.updateInput(0, { finalScriptSig: Buffer.from([0x51]) });
+
+      assert.throws(() => {
+        psbt.extractTransaction();
+      }, new RegExp('Need a Utxo input item for input #0'));
+    });
+  });
+
   describe('clone', () => {
     it('Should clone a psbt exactly with no reference', () => {
       const f = fixtures.clone;
