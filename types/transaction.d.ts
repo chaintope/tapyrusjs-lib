@@ -24,7 +24,15 @@ export declare class Transaction {
     isCoinbase(): boolean;
     addInput(hash: Buffer, index: number, sequence?: number, scriptSig?: Buffer): number;
     addOutput(scriptPubKey: Buffer, value: number): number;
-    byteLength(mulFix?: boolean): number;
+    /**
+     * The size of the serialized transaction in bytes, scriptSig included.
+     */
+    byteLength(): number;
+    /**
+     * The size in bytes of the serialization the hashMalFix txid is taken from.
+     * The scriptSig of each input is left out.
+     */
+    byteLengthMalFix(): number;
     clone(): Transaction;
     /**
      * Hash transaction for signing a specific input.
@@ -40,5 +48,10 @@ export declare class Transaction {
     toBuffer(buffer?: Buffer, initialOffset?: number): Buffer;
     toHex(): string;
     setInputScript(index: number, scriptSig: Buffer): void;
+    /**
+     * @param mulFix serialize without the scriptSig of each input, as the
+     *   hashMalFix txid does.
+     */
+    private __byteLength;
     private __toBuffer;
 }

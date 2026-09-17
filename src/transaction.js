@@ -106,22 +106,18 @@ class Transaction {
       }) - 1
     );
   }
-  byteLength(mulFix = false) {
-    return (
-      8 +
-      varuint.encodingLength(this.ins.length) +
-      varuint.encodingLength(this.outs.length) +
-      this.ins.reduce((sum, input) => {
-        if (mulFix) {
-          return sum + 40;
-        } else {
-          return sum + 40 + varSliceSize(input.script);
-        }
-      }, 0) +
-      this.outs.reduce((sum, output) => {
-        return sum + 8 + varSliceSize(output.script);
-      }, 0)
-    );
+  /**
+   * The size of the serialized transaction in bytes, scriptSig included.
+   */
+  byteLength() {
+    return this.__byteLength(false);
+  }
+  /**
+   * The size in bytes of the serialization the hashMalFix txid is taken from.
+   * The scriptSig of each input is left out.
+   */
+  byteLengthMalFix() {
+    return this.__byteLength(true);
   }
   clone() {
     const newTx = new Transaction();
@@ -225,8 +221,29 @@ class Transaction {
     typeforce(types.tuple(types.Number, types.Buffer), arguments);
     this.ins[index].script = scriptSig;
   }
+  /**
+   * @param mulFix serialize without the scriptSig of each input, as the
+   *   hashMalFix txid does.
+   */
+  __byteLength(mulFix) {
+    return (
+      8 +
+      varuint.encodingLength(this.ins.length) +
+      varuint.encodingLength(this.outs.length) +
+      this.ins.reduce((sum, input) => {
+        if (mulFix) {
+          return sum + 40;
+        } else {
+          return sum + 40 + varSliceSize(input.script);
+        }
+      }, 0) +
+      this.outs.reduce((sum, output) => {
+        return sum + 8 + varSliceSize(output.script);
+      }, 0)
+    );
+  }
   __toBuffer(buffer, initialOffset, mulFix = false) {
-    if (!buffer) buffer = Buffer.allocUnsafe(this.byteLength(mulFix));
+    if (!buffer) buffer = Buffer.allocUnsafe(this.__byteLength(mulFix));
     const bufferWriter = new bufferutils_1.BufferWriter(
       buffer,
       initialOffset || 0,

@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import { beforeEach, describe, it } from 'mocha';
+import * as varuint from 'varuint-bitcoin';
 import { Transaction } from '..';
 import * as bscript from '../src/script';
 import * as fixtures from './fixtures/transaction.json';
@@ -107,6 +108,32 @@ describe('Transaction', () => {
       assert.deepStrictEqual(a, b);
       assert.deepStrictEqual(a, target.slice(0, byteLength));
       assert.deepStrictEqual(b, target.slice(byteLength));
+    });
+  });
+
+  describe('byteLength', () => {
+    it('counts the scriptSig of every input', () => {
+      fixtures.valid.forEach(f => {
+        const tx = fromRaw(f.raw);
+        assert.strictEqual(tx.byteLength(), f.hex.length / 2);
+      });
+    });
+  });
+
+  describe('byteLengthMalFix', () => {
+    it('leaves out the scriptSig of every input', () => {
+      fixtures.valid.forEach(f => {
+        const tx = fromRaw(f.raw);
+        const scriptSigs = tx.ins.reduce(
+          (sum, input) =>
+            sum +
+            varuint.encodingLength(input.script.length) +
+            input.script.length,
+          0,
+        );
+
+        assert.strictEqual(tx.byteLengthMalFix(), tx.byteLength() - scriptSigs);
+      });
     });
   });
 
