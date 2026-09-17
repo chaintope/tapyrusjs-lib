@@ -152,11 +152,20 @@ describe('Bitcoin-core', () => {
       const fhex = f[1];
       //      const verifyFlags = f[2] // TODO: do we need to test this?
 
-      // Tapyrus のトランザクションは witness を持たないため、
-      // witness マーカーを含む Bitcoin のベクタは対象外とする
-      if (typeof fhex === 'string' && fhex.slice(8, 12) === '0001') return;
+      // Tapyrus のトランザクションは witness を持たない。
+      // vin 数のバイトが 0 なのに fixture が prevout を宣言しているベクタは、
+      // その 0 が witness マーカーであり、Bitcoin 固有の形式である。
+      // 入力を持たない legacy トランザクションと区別するため、
+      // hex のバイト列だけでは判定しない。
+      const hasWitnessMarker =
+        typeof fhex === 'string' &&
+        fhex.slice(8, 10) === '00' &&
+        (inputs as any[]).length > 0;
 
-      it('can decode ' + fhex, () => {
+      // スキップした件数が mocha の出力に残るように it.skip を使う
+      const test = hasWitnessMarker ? it.skip : it;
+
+      test('can decode ' + fhex, () => {
         const transaction = bitcoin.Transaction.fromHex(fhex as string);
 
         transaction.ins.forEach((txIn, i) => {
