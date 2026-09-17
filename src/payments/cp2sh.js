@@ -4,6 +4,7 @@ exports.cp2sh = cp2sh;
 const bcrypto = require('../crypto');
 const networks_1 = require('../networks');
 const bscript = require('../script');
+const types = require('../types');
 const lazy = require('./lazy');
 const util_1 = require('./util');
 const typef = require('typeforce');
@@ -27,7 +28,7 @@ function cp2sh(a, opts) {
         input: typef.maybe(typef.Buffer),
       }),
       input: typef.maybe(typef.Buffer),
-      colorId: typef.maybe(typef.BufferN(33)),
+      colorId: typef.maybe(types.ColorId),
     },
     a,
   );
@@ -115,11 +116,13 @@ function cp2sh(a, opts) {
       )
         throw new TypeError('Output is invalid');
       const colorId2 = a.output.slice(1, 34);
-      (0, util_1.validColorId)(colorId, colorId2);
+      colorId = (0, util_1.validColorId)(colorId, colorId2);
       const hash2 = a.output.slice(37, 57);
       (0, util_1.checkHash)(hash, hash2);
       hash = hash2;
     }
+    if (colorId.length > 0 && !types.ColorId(colorId))
+      throw new TypeError('Invalid color identifier');
     if (a.input) {
       const hash2 = (0, util_1.checkInput)(
         (0, util_1.chunksFn)(a.input),

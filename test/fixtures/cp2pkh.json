@@ -212,6 +212,30 @@
         "signature": "300602010002010001",
         "input": "300602010302010301 030000000000000000000000000000000000000000000000000000000000000001"
       }
+    },
+    {
+      "exception": "color identifier",
+      "description": "colorId with type byte 0x00",
+      "arguments": {
+        "hash": "1111111111111111111111111111111111111111",
+        "colorId": "002222222222222222222222222222222222222222222222222222222222222222"
+      }
+    },
+    {
+      "exception": "color identifier",
+      "description": "colorId with type byte 0xc4",
+      "arguments": {
+        "hash": "1111111111111111111111111111111111111111",
+        "colorId": "c42222222222222222222222222222222222222222222222222222222222222222"
+      }
+    },
+    {
+      "exception": "color identifier",
+      "description": "colorId with all-zero payload",
+      "arguments": {
+        "hash": "1111111111111111111111111111111111111111",
+        "colorId": "c10000000000000000000000000000000000000000000000000000000000000000"
+      }
     }
   ],
   "dynamic": {

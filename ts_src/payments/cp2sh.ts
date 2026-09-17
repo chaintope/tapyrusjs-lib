@@ -1,6 +1,7 @@
 import * as bcrypto from '../crypto';
 import { prod as PROD_NETWORK } from '../networks';
 import * as bscript from '../script';
+import * as types from '../types';
 import { Payment, PaymentOpts, Stack } from './index';
 import * as lazy from './lazy';
 import {
@@ -38,7 +39,7 @@ export function cp2sh(a: Payment, opts?: PaymentOpts): Payment {
         input: typef.maybe(typef.Buffer),
       }),
       input: typef.maybe(typef.Buffer),
-      colorId: typef.maybe(typef.BufferN(33)),
+      colorId: typef.maybe(types.ColorId),
     },
     a,
   );
@@ -140,12 +141,15 @@ export function cp2sh(a: Payment, opts?: PaymentOpts): Payment {
         throw new TypeError('Output is invalid');
 
       const colorId2 = a.output.slice(1, 34);
-      validColorId(colorId, colorId2);
+      colorId = validColorId(colorId, colorId2);
 
       const hash2 = a.output.slice(37, 57);
       checkHash(hash, hash2);
       hash = hash2;
     }
+
+    if (colorId.length > 0 && !types.ColorId(colorId))
+      throw new TypeError('Invalid color identifier');
 
     if (a.input) {
       const hash2 = checkInput(chunksFn(a.input), redeemFn(a, network), hash);
