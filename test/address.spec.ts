@@ -52,6 +52,53 @@ describe('address', () => {
     });
   });
 
+  describe('color identifier', () => {
+    const hash = Buffer.from('1111111111111111111111111111111111111111', 'hex');
+    const colorId = Buffer.from(
+      'c32222222222222222222222222222222222222222222222222222222222222222',
+      'hex',
+    );
+
+    ['00', 'c0', 'c4'].forEach(typeByte => {
+      it('rejects the type byte 0x' + typeByte, () => {
+        const invalid = Buffer.concat([
+          Buffer.from(typeByte, 'hex'),
+          colorId.slice(1),
+        ]);
+
+        assert.throws(() => {
+          baddress.toBase58Check(hash, 1, invalid);
+        }, new RegExp('color identifier'));
+      });
+    });
+
+    it('rejects an all-zero payload', () => {
+      const zero = Buffer.concat([Buffer.from('c1', 'hex'), Buffer.alloc(32)]);
+
+      assert.throws(() => {
+        baddress.toBase58Check(hash, 1, zero);
+      }, new RegExp('color identifier'));
+    });
+
+    it('rejects a colorId that is not 33 bytes', () => {
+      assert.throws(() => {
+        baddress.toBase58Check(hash, 1, colorId.slice(0, 32));
+      }, new RegExp('color identifier'));
+    });
+
+    it('round-trips a valid color identifier', () => {
+      const encoded = baddress.toBase58Check(hash, 1, colorId);
+      const decoded = baddress.fromBase58Check(encoded);
+
+      assert.strictEqual(decoded.version, 1);
+      assert.strictEqual(decoded.hash.toString('hex'), hash.toString('hex'));
+      assert.strictEqual(
+        decoded.colorId!.toString('hex'),
+        colorId.toString('hex'),
+      );
+    });
+  });
+
   describe('toBase58Check', () => {
     fixtures.standard.forEach(f => {
       if (!f.base58check) return;

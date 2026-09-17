@@ -1,6 +1,11 @@
 import * as crypto from './crypto';
 import { Network, NetworkId } from './networks';
 import * as payments from './payments';
+import {
+  COLOR_ID_NFT,
+  COLOR_ID_NON_REISSUABLE,
+  COLOR_ID_REISSUABLE,
+} from './types';
 const canonicalize = require('canonicalize');
 const ecc = require('tiny-secp256k1');
 
@@ -56,10 +61,6 @@ const MAX_SYMBOL_LENGTH = 12;
 const MAX_DECIMALS = 18;
 const MAX_DESCRIPTION_LENGTH = 256;
 const MAX_DATA_URI_SIZE = 32768;
-
-const COLOR_ID_REISSUABLE = 0xc1;
-const COLOR_ID_NON_REISSUABLE = 0xc2;
-const COLOR_ID_NFT = 0xc3;
 
 const VALID_TOKEN_TYPES: TokenType[] = ['reissuable', 'non_reissuable', 'nft'];
 

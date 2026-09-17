@@ -1,6 +1,7 @@
 import * as bcrypto from '../crypto';
 import { prod as PROD_NETWORK } from '../networks';
 import * as bscript from '../script';
+import * as types from '../types';
 import { Payment, PaymentOpts } from './index';
 import * as lazy from './lazy';
 import { checkHash, chunksFn, coloredAddressFn, validColorId } from './util';
@@ -27,7 +28,7 @@ export function cp2pkh(a: Payment, opts?: PaymentOpts): Payment {
       pubkey: typef.maybe(ecc.isPoint),
       signature: typef.maybe(bscript.isCanonicalScriptSignature),
       input: typef.maybe(typef.Buffer),
-      colorId: typef.maybe(typef.BufferN(33)),
+      colorId: typef.maybe(types.ColorId),
     },
     a,
   );
@@ -120,11 +121,14 @@ export function cp2pkh(a: Payment, opts?: PaymentOpts): Payment {
         throw new TypeError('Output is invalid');
 
       const colorId2 = a.output.slice(1, 34);
-      validColorId(colorId, colorId2);
+      colorId = validColorId(colorId, colorId2);
       const hash2 = a.output.slice(38, 58);
       checkHash(hash, hash2);
       hash = hash2;
     }
+
+    if (colorId.length > 0 && !types.ColorId(colorId))
+      throw new TypeError('Invalid color identifier');
 
     if (a.pubkey) {
       const pkh = bcrypto.hash160(a.pubkey);

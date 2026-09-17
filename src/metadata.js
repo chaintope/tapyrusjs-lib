@@ -36,6 +36,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
 exports.Metadata = void 0;
 const crypto = require('./crypto');
 const payments = require('./payments');
+const types_1 = require('./types');
 const canonicalize = require('canonicalize');
 const ecc = require('tiny-secp256k1');
 const MAX_NAME_LENGTH = 64;
@@ -43,14 +44,11 @@ const MAX_SYMBOL_LENGTH = 12;
 const MAX_DECIMALS = 18;
 const MAX_DESCRIPTION_LENGTH = 256;
 const MAX_DATA_URI_SIZE = 32768;
-const COLOR_ID_REISSUABLE = 0xc1;
-const COLOR_ID_NON_REISSUABLE = 0xc2;
-const COLOR_ID_NFT = 0xc3;
 const VALID_TOKEN_TYPES = ['reissuable', 'non_reissuable', 'nft'];
 const COLOR_ID_TYPE_MAP = {
-  [COLOR_ID_REISSUABLE]: 'reissuable',
-  [COLOR_ID_NON_REISSUABLE]: 'non_reissuable',
-  [COLOR_ID_NFT]: 'nft',
+  [types_1.COLOR_ID_REISSUABLE]: 'reissuable',
+  [types_1.COLOR_ID_NON_REISSUABLE]: 'non_reissuable',
+  [types_1.COLOR_ID_NFT]: 'nft',
 };
 function isHttpsUrl(value) {
   try {
@@ -414,7 +412,7 @@ class Metadata {
         script[24] = 0xac; // OP_CHECKSIG
         const scriptHash = crypto.sha256(script);
         const colorId = Buffer.alloc(33);
-        colorId[0] = COLOR_ID_REISSUABLE;
+        colorId[0] = types_1.COLOR_ID_REISSUABLE;
         scriptHash.copy(colorId, 1);
         return colorId;
       }
@@ -427,7 +425,7 @@ class Metadata {
         outPointPayload.writeUInt32LE(outPoint.index, 32);
         const outPointHash = crypto.sha256(outPointPayload);
         const colorId = Buffer.alloc(33);
-        colorId[0] = COLOR_ID_NON_REISSUABLE;
+        colorId[0] = types_1.COLOR_ID_NON_REISSUABLE;
         outPointHash.copy(colorId, 1);
         return colorId;
       }
@@ -440,7 +438,7 @@ class Metadata {
         outPointPayload.writeUInt32LE(outPoint.index, 32);
         const outPointHash = crypto.sha256(outPointPayload);
         const colorId = Buffer.alloc(33);
-        colorId[0] = COLOR_ID_NFT;
+        colorId[0] = types_1.COLOR_ID_NFT;
         outPointHash.copy(colorId, 1);
         return colorId;
       }
