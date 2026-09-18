@@ -14,7 +14,8 @@ export declare function sign(privateKey: Buffer, hash: Buffer): Buffer;
  * Verify a 64-byte signature (Rx || s) against a 32-byte hash by computing
  * R' = sG - eP and checking that R'.y is a quadratic residue and R'.x == Rx.
  *
- * Accepts a 33-byte compressed or a 65-byte uncompressed public key. The point
- * is parsed by libsecp256k1, which rejects a pair that is not on the curve.
+ * Accepts a 33-byte compressed or a 65-byte uncompressed public key, and no
+ * other encoding. The point is parsed by libsecp256k1, which rejects a pair
+ * that is not on the curve.
  */
 export declare function verify(publicKey: Buffer, hash: Buffer, signature: Buffer): boolean;

@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import { describe, it } from 'mocha';
 import { crypto as bcrypto, ECPair, schnorr } from '..';
+const ecc = require('tiny-secp256k1');
 
 // Known-answer vectors from tapyrus-core's own C++ unit test,
 // src/test/key_tests.cpp (`schnorr_signature` / deterministic signing), which
@@ -178,6 +179,27 @@ describe('schnorr', () => {
       assert.strictEqual(
         schnorr.verify(keyPair.publicKey, KAT.hash, badS),
         false,
+      );
+    });
+
+    it('rejects a hybrid public key', () => {
+      // 0x06 / 0x07 encode a point that is on the curve, and libsecp256k1
+      // parses them, but tapyrus-core fails such a key with
+      // SCRIPT_ERR_PUBKEYTYPE whatever the script flags are
+      const uncompressed = Buffer.from(
+        ecc.pointFromScalar(KAT.privateKey, false),
+      );
+      // the hybrid prefix states the parity of y, so only one of the two
+      // parses; libsecp256k1 accepts it, and this must not
+      const hybrid = Buffer.from(uncompressed);
+      hybrid[0] = uncompressed[64] & 1 ? 0x07 : 0x06;
+
+      assert.strictEqual(ecc.isPoint(hybrid), true, 'should be a point');
+      assert.strictEqual(schnorr.verify(hybrid, KAT.hash, signature), false);
+      // the uncompressed form of the same key is still accepted
+      assert.strictEqual(
+        schnorr.verify(uncompressed, KAT.hash, signature),
+        true,
       );
     });
 

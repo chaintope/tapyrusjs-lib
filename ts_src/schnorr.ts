@@ -25,6 +25,7 @@ const ZERO = BigInt(0);
 const ONE = BigInt(1);
 const TWO = BigInt(2);
 const EIGHT = BigInt(8);
+const BYTE_MASK = BigInt(0xff);
 
 const P = BigInt(
   '0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f',
@@ -61,12 +62,35 @@ function bufferToBigInt(buffer: Buffer): bigint {
   return result;
 }
 
+// The counterpart of bufferToBigInt: writes the bytes out without going
+// through a string, so that no copy of a secret survives in one. e*d is as
+// good as the private key, because e is public and invertible modulo n.
 function bigIntToBuffer32(value: bigint): Buffer {
-  return Buffer.from(value.toString(16).padStart(64, '0'), 'hex');
+  const buffer = Buffer.alloc(32);
+  let v = value;
+  for (let i = 31; i >= 0; i--) {
+    buffer[i] = Number(v & BYTE_MASK);
+    v >>= EIGHT;
+  }
+  return buffer;
 }
 
 function isQuadraticResidue(y: bigint): boolean {
   return powmod(y, (P - ONE) / TWO, P) === ONE;
+}
+
+/**
+ * tapyrus-core accepts only the compressed and uncompressed encodings.
+ * CheckPubKeyEncoding runs IsCompressedOrUncompressedPubKey unconditionally,
+ * so a hybrid key (0x06 / 0x07) fails with SCRIPT_ERR_PUBKEYTYPE whatever the
+ * script flags are. libsecp256k1 parses hybrid keys, so the prefix has to be
+ * checked here.
+ */
+function hasValidPrefix(publicKey: Buffer): boolean {
+  if (publicKey.length === 33)
+    return publicKey[0] === 0x02 || publicKey[0] === 0x03;
+  if (publicKey.length === 65) return publicKey[0] === 0x04;
+  return false;
 }
 
 /** The x coordinate of an uncompressed point, as returned by tiny-secp256k1. */
@@ -146,8 +170,8 @@ export function sign(privateKey: Buffer, hash: Buffer): Buffer {
   const compressedPubkey = Buffer.from(ecc.pointFromScalar(privateKey, true));
 
   let k = rfc6979Nonce(privateKey, hash);
+  // rfc6979Nonce guarantees 0 < k < n, so kG is never the point at infinity
   const r = ecc.pointFromScalar(k, false);
-  if (r === null) throw new Error('Invalid nonce');
 
   const rx = pointX(r);
   // flip the nonce so that R.y is a quadratic residue
@@ -166,8 +190,9 @@ export function sign(privateKey: Buffer, hash: Buffer): Buffer {
  * Verify a 64-byte signature (Rx || s) against a 32-byte hash by computing
  * R' = sG - eP and checking that R'.y is a quadratic residue and R'.x == Rx.
  *
- * Accepts a 33-byte compressed or a 65-byte uncompressed public key. The point
- * is parsed by libsecp256k1, which rejects a pair that is not on the curve.
+ * Accepts a 33-byte compressed or a 65-byte uncompressed public key, and no
+ * other encoding. The point is parsed by libsecp256k1, which rejects a pair
+ * that is not on the curve.
  */
 export function verify(
   publicKey: Buffer,
@@ -186,29 +211,28 @@ export function verify(
   const s = bufferToBigInt(signature.subarray(32));
   if (r >= P || s >= N) return false;
 
-  if (!ecc.isPoint(publicKey)) return false;
+  if (!hasValidPrefix(publicKey) || !ecc.isPoint(publicKey)) return false;
   const compressedPubkey = Buffer.from(ecc.pointCompress(publicKey, true));
 
   const e = challenge(rx, compressedPubkey, hash);
   const negE = mod(N - e, N);
 
-  // a zero scalar would multiply to the point at infinity, which
-  // tiny-secp256k1 does not accept as a tweak
-  const sG =
-    s === ZERO ? null : ecc.pointFromScalar(bigIntToBuffer32(s), false);
+  const sBuffer = bigIntToBuffer32(s);
+  // e is a hash modulo n, so negE is only zero with probability 2^-256
   const eP =
     negE === ZERO
       ? null
       : ecc.pointMultiply(publicKey, bigIntToBuffer32(negE), false);
 
-  let computed: Uint8Array | null;
-  if (sG === null) computed = eP;
-  else if (eP === null) computed = sG;
-  else computed = ecc.pointAdd(sG, eP, false);
+  // pointAddScalar accepts a zero scalar and returns null at infinity, so
+  // s === 0 needs no special case
+  const computed =
+    eP === null
+      ? s === ZERO
+        ? null
+        : ecc.pointFromScalar(sBuffer, false)
+      : ecc.pointAddScalar(eP, sBuffer, false);
   if (computed === null) return false;
 
-  return (
-    isQuadraticResidue(pointY(computed)) &&
-    bufferToBigInt(pointX(computed)) === r
-  );
+  return isQuadraticResidue(pointY(computed)) && rx.equals(pointX(computed));
 }
