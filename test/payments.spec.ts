@@ -2,17 +2,7 @@ import * as assert from 'assert';
 import { describe, it } from 'mocha';
 import { PaymentCreator } from '../src/payments';
 import * as u from './payments.utils';
-[
-  'cp2pkh',
-  'cp2sh',
-  'embed',
-  'p2ms',
-  'p2pk',
-  'p2pkh',
-  'p2sh',
-  'p2wpkh',
-  'p2wsh',
-].forEach(p => {
+['cp2pkh', 'cp2sh', 'embed', 'p2ms', 'p2pk', 'p2pkh', 'p2sh'].forEach(p => {
   describe(p, () => {
     let fn: PaymentCreator;
     const payment = require('../src/payments/' + p);
@@ -56,30 +46,6 @@ import * as u from './payments.utils';
         },
       );
     });
-
-    if (p === 'p2sh') {
-      const p2wsh = require('../src/payments/p2wsh').p2wsh;
-      const p2pk = require('../src/payments/p2pk').p2pk;
-      it('properly assembles nested p2wsh with names', () => {
-        const actual = fn({
-          redeem: p2wsh({
-            redeem: p2pk({
-              pubkey: Buffer.from(
-                '03e15819590382a9dd878f01e2f0cbce541564eb415e43b440472d883ecd283058',
-                'hex',
-              ),
-            }),
-          }),
-        });
-        assert.strictEqual(
-          actual.address,
-          '3MGbrbye4ttNUXM8WAvBFRKry4fkS9fjuw',
-        );
-        assert.strictEqual(actual.name, 'p2sh-p2wsh-p2pk');
-        assert.strictEqual(actual.redeem!.name, 'p2wsh-p2pk');
-        assert.strictEqual(actual.redeem!.redeem!.name, 'p2pk');
-      });
-    }
 
     // cross-verify dynamically too
     if (!fixtures.dynamic) return;

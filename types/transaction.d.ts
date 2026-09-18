@@ -7,7 +7,6 @@ export interface Input {
     index: number;
     script: Buffer;
     sequence: number;
-    witness: Buffer[];
 }
 export declare class Transaction {
     static readonly DEFAULT_SEQUENCE = 4294967295;
@@ -15,8 +14,6 @@ export declare class Transaction {
     static readonly SIGHASH_NONE = 2;
     static readonly SIGHASH_SINGLE = 3;
     static readonly SIGHASH_ANYONECANPAY = 128;
-    static readonly ADVANCED_TRANSACTION_MARKER = 0;
-    static readonly ADVANCED_TRANSACTION_FLAG = 1;
     static fromBuffer(buffer: Buffer, _NO_STRICT?: boolean): Transaction;
     static fromHex(hex: string): Transaction;
     static isCoinbaseHash(buffer: Buffer): boolean;
@@ -27,10 +24,15 @@ export declare class Transaction {
     isCoinbase(): boolean;
     addInput(hash: Buffer, index: number, sequence?: number, scriptSig?: Buffer): number;
     addOutput(scriptPubKey: Buffer, value: number): number;
-    hasWitnesses(): boolean;
-    weight(): number;
-    virtualSize(): number;
-    byteLength(_ALLOW_WITNESS?: boolean, mulFix?: boolean): number;
+    /**
+     * The size of the serialized transaction in bytes, scriptSig included.
+     */
+    byteLength(): number;
+    /**
+     * The size in bytes of the serialization the hashMalFix txid is taken from.
+     * The scriptSig of each input is left out.
+     */
+    byteLengthMalFix(): number;
     clone(): Transaction;
     /**
      * Hash transaction for signing a specific input.
@@ -41,12 +43,15 @@ export declare class Transaction {
      * This hash can then be used to sign the provided transaction input.
      */
     hashForSignature(inIndex: number, prevOutScript: Buffer, hashType: number): Buffer;
-    hashForWitnessV0(inIndex: number, prevOutScript: Buffer, value: number, hashType: number): Buffer;
-    getHash(forWitness?: boolean): Buffer;
+    getHash(): Buffer;
     getId(): string;
     toBuffer(buffer?: Buffer, initialOffset?: number): Buffer;
     toHex(): string;
     setInputScript(index: number, scriptSig: Buffer): void;
-    setWitness(index: number, witness: Buffer[]): void;
+    /**
+     * @param mulFix serialize without the scriptSig of each input, as the
+     *   hashMalFix txid does.
+     */
+    private __byteLength;
     private __toBuffer;
 }

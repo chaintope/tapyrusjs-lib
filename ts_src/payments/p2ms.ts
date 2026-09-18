@@ -92,10 +92,6 @@ export function p2ms(a: Payment, opts?: PaymentOpts): Payment {
     if (!a.signatures) return;
     return bscript.compile(([OPS.OP_0] as Stack).concat(a.signatures));
   });
-  lazy.prop(o, 'witness', () => {
-    if (!o.input) return;
-    return [];
-  });
   lazy.prop(o, 'name', () => {
     if (!o.m || !o.n) return;
     return `p2ms(${o.m} of ${o.n})`;

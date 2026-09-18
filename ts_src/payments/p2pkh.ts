@@ -73,10 +73,6 @@ export function p2pkh(a: Payment, opts?: PaymentOpts): Payment {
     if (!a.signature) return;
     return bscript.compile([a.signature, a.pubkey]);
   });
-  lazy.prop(o, 'witness', () => {
-    if (!o.input) return;
-    return [];
-  });
 
   // extended validation
   if (opts.validate) {

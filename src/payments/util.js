@@ -9,7 +9,6 @@ exports.checkHash = checkHash;
 exports.validColorId = validColorId;
 exports.stacksEqual = stacksEqual;
 exports.checkInput = checkInput;
-exports.checkWitness = checkWitness;
 exports.checkRedeem = checkRedeem;
 const bcrypto = require('../crypto');
 const networks = require('../networks');
@@ -24,12 +23,6 @@ function fromOutputScript(output, network) {
   } catch (e) {}
   try {
     return payments.p2sh({ output, network });
-  } catch (e) {}
-  try {
-    return payments.p2wpkh({ output, network });
-  } catch (e) {}
-  try {
-    return payments.p2wsh({ output, network });
   } catch (e) {}
   try {
     return payments.cp2pkh({ output, network });
@@ -68,7 +61,6 @@ function redeemFn(a, network) {
       network,
       output: chunks[chunks.length - 1],
       input: bscript.compile(chunks.slice(0, -1)),
-      witness: a.witness || [],
     };
   });
 }
@@ -93,16 +85,6 @@ function checkInput(_chunksFn, _redeemFn, hashForCheck) {
   const redeem = _redeemFn();
   if (!Buffer.isBuffer(redeem.output)) throw new TypeError('Input is invalid');
   return _checkRedeem(redeem, hashForCheck);
-}
-function checkWitness(a) {
-  if (a.witness) {
-    if (
-      a.redeem &&
-      a.redeem.witness &&
-      !stacksEqual(a.redeem.witness, a.witness)
-    )
-      throw new TypeError('Witness and redeem.witness mismatch');
-  }
 }
 function checkRedeem(a, network, _redeemFn, hashForCheck) {
   if (a.redeem) {
@@ -131,16 +113,10 @@ function _checkRedeem(redeem, hashForCheck) {
     checkHash(hashForCheck, hash2);
   }
   if (redeem.input) {
-    const hasInput = redeem.input.length > 0;
-    const hasWitness = redeem.witness && redeem.witness.length > 0;
-    if (!hasInput && !hasWitness) throw new TypeError('Empty input');
-    if (hasInput && hasWitness)
-      throw new TypeError('Input and witness provided');
-    if (hasInput) {
-      const richunks = bscript.decompile(redeem.input);
-      if (!bscript.isPushOnly(richunks))
-        throw new TypeError('Non push-only scriptSig');
-    }
+    if (redeem.input.length === 0) throw new TypeError('Empty input');
+    const richunks = bscript.decompile(redeem.input);
+    if (!bscript.isPushOnly(richunks))
+      throw new TypeError('Non push-only scriptSig');
   }
   return hash2;
 }

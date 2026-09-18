@@ -1,16 +1,13 @@
 'use strict';
 Object.defineProperty(exports, '__esModule', { value: true });
 exports.fromBase58Check = fromBase58Check;
-exports.fromBech32 = fromBech32;
 exports.toBase58Check = toBase58Check;
-exports.toBech32 = toBech32;
 exports.fromOutputScript = fromOutputScript;
 exports.toOutputScript = toOutputScript;
 const networks = require('./networks');
 const payments = require('./payments');
 const bscript = require('./script');
 const types = require('./types');
-const bech32 = require('bech32');
 const bs58check = require('bs58check');
 const typeforce = require('typeforce');
 const PUBKEY_HASH_LENGTH = 20;
@@ -39,15 +36,6 @@ function fromBase58Check(address) {
     return { version, hash };
   }
 }
-function fromBech32(address) {
-  const result = bech32.decode(address);
-  const data = bech32.fromWords(result.words.slice(1));
-  return {
-    version: result.words[0],
-    prefix: result.prefix,
-    data: Buffer.from(data),
-  };
-}
 function toBase58Check(hash, version, colorId) {
   typeforce(types.tuple(types.Hash160bit, types.UInt8), arguments);
   const payload = colorId
@@ -62,11 +50,6 @@ function toBase58Check(hash, version, colorId) {
   }
   return bs58check.encode(payload);
 }
-function toBech32(data, version, prefix) {
-  const words = bech32.toWords(data);
-  words.unshift(version);
-  return bech32.encode(prefix, words);
-}
 function fromOutputScript(output, network) {
   try {
     const payment = payments.util.fromOutputScript(output, network);
@@ -77,7 +60,6 @@ function fromOutputScript(output, network) {
 function toOutputScript(address, network) {
   network = network || networks.prod;
   let decodeBase58;
-  let decodeBech32;
   try {
     decodeBase58 = fromBase58Check(address);
   } catch (e) {}
@@ -96,20 +78,6 @@ function toOutputScript(address, network) {
         hash: decodeBase58.hash,
         colorId: decodeBase58.colorId,
       }).output;
-  } else {
-    try {
-      decodeBech32 = fromBech32(address);
-    } catch (e) {}
-    if (decodeBech32) {
-      if (decodeBech32.prefix !== network.bech32)
-        throw new Error(address + ' has an invalid prefix');
-      if (decodeBech32.version === 0) {
-        if (decodeBech32.data.length === 20)
-          return payments.p2wpkh({ hash: decodeBech32.data }).output;
-        if (decodeBech32.data.length === 32)
-          return payments.p2wsh({ hash: decodeBech32.data }).output;
-      }
-    }
   }
   throw new Error(address + ' has no matching Script');
 }

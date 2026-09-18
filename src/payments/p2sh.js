@@ -10,7 +10,6 @@ const typef = require('typeforce');
 const OPS = bscript.OPS;
 const bs58check = require('bs58check');
 // input: [redeemScriptSig ...] {redeemScript}
-// witness: <?>
 // output: OP_HASH160 {hash160(redeemScript)} OP_EQUAL
 function p2sh(a, opts) {
   if (!a.address && !a.hash && !a.output && !a.redeem && !a.input)
@@ -26,10 +25,8 @@ function p2sh(a, opts) {
         network: typef.maybe(typef.Object),
         output: typef.maybe(typef.Buffer),
         input: typef.maybe(typef.Buffer),
-        witness: typef.maybe(typef.arrayOf(typef.Buffer)),
       }),
       input: typef.maybe(typef.Buffer),
-      witness: typef.maybe(typef.arrayOf(typef.Buffer)),
     },
     a,
   );
@@ -67,10 +64,6 @@ function p2sh(a, opts) {
     return bscript.compile(
       [].concat(bscript.decompile(a.redeem.input), a.redeem.output),
     );
-  });
-  lazy.prop(o, 'witness', () => {
-    if (o.redeem && o.redeem.witness) return o.redeem.witness;
-    if (o.input) return [];
   });
   lazy.prop(o, 'name', () => {
     const nameParts = ['p2sh'];
@@ -113,7 +106,6 @@ function p2sh(a, opts) {
       }
     }
     (0, util_1.checkRedeem)(a, network, (0, util_1.redeemFn)(a, network), hash);
-    (0, util_1.checkWitness)(a);
   }
   return Object.assign(o, a);
 }

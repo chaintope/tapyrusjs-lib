@@ -16,7 +16,6 @@ export declare class BufferWriter {
     writeVarInt(i: number): void;
     writeSlice(slice: Buffer): void;
     writeVarSlice(slice: Buffer): void;
-    writeVector(vector: Buffer[]): void;
 }
 /**
  * Helper class for reading of bitcoin data types from a buffer.
@@ -32,5 +31,4 @@ export declare class BufferReader {
     readVarInt(): number;
     readSlice(n: number): Buffer;
     readVarSlice(): Buffer;
-    readVector(): Buffer[];
 }

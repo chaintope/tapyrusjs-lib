@@ -31,35 +31,13 @@ describe('address', () => {
     });
   });
 
-  describe('fromBech32', () => {
-    fixtures.standard.forEach(f => {
-      if (!f.bech32) return;
-
-      it('decodes ' + f.bech32, () => {
-        const actual = baddress.fromBech32(f.bech32);
-
-        assert.strictEqual(actual.version, f.version);
-        assert.strictEqual(actual.prefix, NETWORKS[f.network].bech32);
-        assert.strictEqual(actual.data.toString('hex'), f.data);
-      });
-    });
-
-    fixtures.invalid.bech32.forEach(f => {
-      it('decode fails for ' + f.address + '(' + f.exception + ')', () => {
-        assert.throws(() => {
-          baddress.fromBech32(f.address);
-        }, new RegExp(f.exception));
-      });
-    });
-  });
-
   describe('fromOutputScript', () => {
     fixtures.standard.forEach(f => {
       it('encodes ' + f.script.slice(0, 30) + '... (' + f.network + ')', () => {
         const script = bscript.fromASM(f.script);
         const address = baddress.fromOutputScript(script, NETWORKS[f.network]);
 
-        assert.strictEqual(address, f.base58check || f.bech32!.toLowerCase());
+        assert.strictEqual(address, f.base58check);
       });
     });
 
@@ -91,36 +69,11 @@ describe('address', () => {
     });
   });
 
-  describe('toBech32', () => {
-    fixtures.bech32.forEach(f => {
-      if (!f.address) return;
-      const data = Buffer.from(f.data, 'hex');
-
-      it('encode ' + f.address, () => {
-        assert.deepStrictEqual(
-          baddress.toBech32(data, f.version, f.prefix),
-          f.address.toLowerCase(),
-        );
-      });
-    });
-
-    // TODO: These fixtures (according to TypeScript) have none of the data used below
-    fixtures.invalid.bech32.forEach((f: any) => {
-      if (!f.prefix || f.version === undefined || f.data === undefined) return;
-
-      it('encode fails (' + f.exception, () => {
-        assert.throws(() => {
-          baddress.toBech32(Buffer.from(f.data, 'hex'), f.version, f.prefix);
-        }, new RegExp(f.exception));
-      });
-    });
-  });
-
   describe('toOutputScript', () => {
     fixtures.standard.forEach(f => {
       it('decodes ' + f.script.slice(0, 30) + '... (' + f.network + ')', () => {
         const script = baddress.toOutputScript(
-          (f.base58check || f.bech32)!,
+          f.base58check,
           NETWORKS[f.network],
         );
 
@@ -131,7 +84,7 @@ describe('address', () => {
     fixtures.invalid.toOutputScript.forEach(f => {
       it('throws when ' + f.exception, () => {
         assert.throws(() => {
-          baddress.toOutputScript(f.address, f.network as any);
+          baddress.toOutputScript(f.address);
         }, new RegExp(f.address + ' ' + f.exception));
       });
     });

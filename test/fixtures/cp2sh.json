@@ -12,8 +12,7 @@
         "hash": "9f840a5fc02407ef0ad499c2ec0eb0b942fb0086",
         "output": "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46 OP_COLOR OP_HASH160 9f840a5fc02407ef0ad499c2ec0eb0b942fb0086 OP_EQUAL",
         "redeem": null,
-        "input": null,
-        "witness": null
+        "input": null
       }
     },
     {
@@ -27,8 +26,7 @@
         "address": "4a28F5ZehQNaMsSCEzBGQSKjVx2Wz2c4s32joimPciFTLzft1F9nPHMTeHMRQ6fzf9is4AcFxQr5Vye",
         "output": "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46 OP_COLOR OP_HASH160 9f840a5fc02407ef0ad499c2ec0eb0b942fb0086 OP_EQUAL",
         "redeem": null,
-        "input": null,
-        "witness": null
+        "input": null
       }
     },
     {
@@ -41,8 +39,7 @@
         "address": "4a28F5ZehQNaMsSCEzBGQSKjVx2Wz2c4s32joimPciFTLzft1F9nPHMTeHMRQ6fzf9is4AcFxQr5Vye",
         "hash": "9f840a5fc02407ef0ad499c2ec0eb0b942fb0086",
         "redeem": null,
-        "input": null,
-        "witness": null
+        "input": null
       }
     },
     {
@@ -59,44 +56,7 @@
         "address": "4a28F5ZehQNaMsSCEzBGQSKjVx2Wz2c4s32joimPciFTLzft1F9nPHMTeHMRQ6fzf9is4AcFxQr5Vye",
         "hash": "9f840a5fc02407ef0ad499c2ec0eb0b942fb0086",
         "output": "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46 OP_COLOR OP_HASH160 9f840a5fc02407ef0ad499c2ec0eb0b942fb0086 OP_EQUAL",
-        "input": null,
-        "witness": null
-      }
-    },
-    {
-      "description": "cp2sh-p2wpkh, out (from redeem)",
-      "arguments": {
-        "colorId": "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46",
-        "redeem": {
-          "hash": "this is P2WPKH context, unknown and ignored by CP2SH",
-          "output": "OP_0 c30afa58ae0673b00a45b5c17dff4633780f1400"
-        }
-      },
-      "expected": {
-        "name": "cp2sh",
-        "address": "4a28F5ZehQNaMsSCEzBGQSKjVx2Wz2c4s32joimPciFTLzRikcE6CvgjgSqziV98NK17Fxhwo8M17V7",
-        "hash": "0432515d8fe8de31be8207987fc6d67b29d5e7cc",
-        "output": "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46 OP_COLOR OP_HASH160 0432515d8fe8de31be8207987fc6d67b29d5e7cc OP_EQUAL",
-        "input": null,
-        "witness": null
-      }
-    },
-    {
-      "description": "cp2sh-p2pk, out (from redeem)",
-      "arguments": {
-        "colorId": "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46",
-        "redeem": {
-          "output": "03e15819590382a9dd878f01e2f0cbce541564eb415e43b440472d883ecd283058 OP_CHECKSIG",
-          "pubkey": "this is P2WPKH context, unknown and ignored by CP2SH"
-        }
-      },
-      "expected": {
-        "name": "cp2sh",
-        "address": "4a28F5ZehQNaMsSCEzBGQSKjVx2Wz2c4s32joimPciFTLzW7GHxrCEHyv7AcA7F2eMSrV2GRtpdTKH5",
-        "hash": "3454c084887afe854e80221c69d6282926f809c4",
-        "output": "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46 OP_COLOR OP_HASH160 3454c084887afe854e80221c69d6282926f809c4 OP_EQUAL",
-        "input": null,
-        "witness": null
+        "input": null
       }
     },
     {
@@ -113,33 +73,7 @@
         "address": "4a28F5ZehQNaMsSCEzBGQSKjVx2Wz2c4s32joimPciFTLzft1F9nPHMTeHMRQ6fzf9is4AcFxQr5Vye",
         "hash": "9f840a5fc02407ef0ad499c2ec0eb0b942fb0086",
         "output": "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46 OP_COLOR OP_HASH160 9f840a5fc02407ef0ad499c2ec0eb0b942fb0086 OP_EQUAL",
-        "input": "3045022100e4fce9ec72b609a2df1dc050c20dcf101d27faefb3e686b7a4cb067becdd5e8e022071287fced53806b08cf39b5ad58bbe614775b3776e98a9f8760af0d4d1d47a9501 03e15819590382a9dd878f01e2f0cbce541564eb415e43b440472d883ecd283058 76a914c30afa58ae0673b00a45b5c17dff4633780f140088ac",
-        "witness": []
-      }
-    },
-    {
-      "description": "cp2sh-p2wpkh, in and out (from redeem w/ witness)",
-      "arguments": {
-        "colorId": "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46",
-        "redeem": {
-          "output": "OP_0 c30afa58ae0673b00a45b5c17dff4633780f1400",
-          "input": "",
-          "witness": [
-            "3045022100e4fce9ec72b609a2df1dc050c20dcf101d27faefb3e686b7a4cb067becdd5e8e022071287fced53806b08cf39b5ad58bbe614775b3776e98a9f8760af0d4d1d47a9501",
-            "03e15819590382a9dd878f01e2f0cbce541564eb415e43b440472d883ecd283058"
-          ]
-        }
-      },
-      "expected": {
-        "name": "cp2sh",
-        "address": "4a28F5ZehQNaMsSCEzBGQSKjVx2Wz2c4s32joimPciFTLzRikcE6CvgjgSqziV98NK17Fxhwo8M17V7",
-        "hash": "0432515d8fe8de31be8207987fc6d67b29d5e7cc",
-        "output": "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46 OP_COLOR OP_HASH160 0432515d8fe8de31be8207987fc6d67b29d5e7cc OP_EQUAL",
-        "input": "0014c30afa58ae0673b00a45b5c17dff4633780f1400",
-        "witness": [
-          "3045022100e4fce9ec72b609a2df1dc050c20dcf101d27faefb3e686b7a4cb067becdd5e8e022071287fced53806b08cf39b5ad58bbe614775b3776e98a9f8760af0d4d1d47a9501",
-          "03e15819590382a9dd878f01e2f0cbce541564eb415e43b440472d883ecd283058"
-        ]
+        "input": "3045022100e4fce9ec72b609a2df1dc050c20dcf101d27faefb3e686b7a4cb067becdd5e8e022071287fced53806b08cf39b5ad58bbe614775b3776e98a9f8760af0d4d1d47a9501 03e15819590382a9dd878f01e2f0cbce541564eb415e43b440472d883ecd283058 76a914c30afa58ae0673b00a45b5c17dff4633780f140088ac"
       }
     },
     {
@@ -155,34 +89,7 @@
         "output": "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46 OP_COLOR OP_HASH160 3454c084887afe854e80221c69d6282926f809c4 OP_EQUAL",
         "redeem": {
           "output": "03e15819590382a9dd878f01e2f0cbce541564eb415e43b440472d883ecd283058 OP_CHECKSIG",
-          "input": "3045022100e4fce9ec72b609a2df1dc050c20dcf101d27faefb3e686b7a4cb067becdd5e8e022071287fced53806b08cf39b5ad58bbe614775b3776e98a9f8760af0d4d1d47a9501",
-          "witness": []
-        },
-        "witness": []
-      }
-    },
-    {
-      "description": "cp2sh-p2wpkh, in and out (from input AND witness)",
-      "arguments": {
-        "colorId": "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46",
-        "input": "0014c30afa58ae0673b00a45b5c17dff4633780f1400",
-        "witness": [
-          "3045022100e4fce9ec72b609a2df1dc050c20dcf101d27faefb3e686b7a4cb067becdd5e8e022071287fced53806b08cf39b5ad58bbe614775b3776e98a9f8760af0d4d1d47a9501",
-          "03e15819590382a9dd878f01e2f0cbce541564eb415e43b440472d883ecd283058"
-        ]
-      },
-      "expected": {
-        "name": "cp2sh",
-        "address": "4a28F5ZehQNaMsSCEzBGQSKjVx2Wz2c4s32joimPciFTLzRikcE6CvgjgSqziV98NK17Fxhwo8M17V7",
-        "hash": "0432515d8fe8de31be8207987fc6d67b29d5e7cc",
-        "output": "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46 OP_COLOR OP_HASH160 0432515d8fe8de31be8207987fc6d67b29d5e7cc OP_EQUAL",
-        "redeem": {
-          "output": "OP_0 c30afa58ae0673b00a45b5c17dff4633780f1400",
-          "input": "",
-          "witness": [
-            "3045022100e4fce9ec72b609a2df1dc050c20dcf101d27faefb3e686b7a4cb067becdd5e8e022071287fced53806b08cf39b5ad58bbe614775b3776e98a9f8760af0d4d1d47a9501",
-            "03e15819590382a9dd878f01e2f0cbce541564eb415e43b440472d883ecd283058"
-          ]
+          "input": "3045022100e4fce9ec72b609a2df1dc050c20dcf101d27faefb3e686b7a4cb067becdd5e8e022071287fced53806b08cf39b5ad58bbe614775b3776e98a9f8760af0d4d1d47a9501"
         }
       }
     },
@@ -202,7 +109,6 @@
         "hash": "9f840a5fc02407ef0ad499c2ec0eb0b942fb0086",
         "output": "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46 OP_COLOR OP_HASH160 9f840a5fc02407ef0ad499c2ec0eb0b942fb0086 OP_EQUAL",
         "input": null,
-        "witness": null,
         "network": "dev"
       }
     }
@@ -335,17 +241,6 @@
       }
     },
     {
-      "exception": "Input and witness provided",
-      "arguments": {
-        "redeem": {
-          "input": "OP_0",
-          "witness": [
-            "030000000000000000000000000000000000000000000000000000000000000001"
-          ]
-        }
-      }
-    },
-    {
       "exception": "Non push-only scriptSig",
       "arguments": {
         "redeem": {
@@ -358,21 +253,6 @@
       "exception": "Redeem.output too short",
       "arguments": {
         "inputHex": "021000"
-      }
-    },
-    {
-      "exception": "Witness and redeem.witness mismatch",
-      "arguments": {
-        "witness": [
-          "3045ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-          "030000000000000000000000000000000000000000000000000000000000000001"
-        ],
-        "redeem": {
-          "witness": [
-            "3045dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-            "030000000000000000000000000000000000000000000000000000000000000001"
-          ]
-        }
       }
     },
     {
@@ -415,29 +295,41 @@
       "address": [
         "address",
         "output",
-        ["colorId", "hash"],
-        ["colorId", "redeem.output"],
-        ["colorId", "input", "witness"]
+        [
+          "colorId",
+          "hash"
+        ],
+        [
+          "colorId",
+          "redeem.output"
+        ]
       ],
       "hash": [
         "address",
         "output",
-        ["colorId", "hash"],
-        "redeem.output",
-        ["colorId", "input", "witness"]
+        [
+          "colorId",
+          "hash"
+        ],
+        "redeem.output"
       ],
       "output": [
         "address",
         "output",
-        ["colorId", "hash"],
-        ["colorId", "redeem.output"],
-        ["colorId", "input", "witness"]
+        [
+          "colorId",
+          "hash"
+        ],
+        [
+          "colorId",
+          "redeem.output"
+        ]
       ],
-      "redeem.output": [["input", "witness"]],
-      "redeem.input": [["input", "witness"]],
-      "redeem.witness": [["input", "witness"]],
-      "input": ["redeem"],
-      "witness": ["redeem"]
+      "redeem.output": [],
+      "redeem.input": [],
+      "input": [
+        "redeem"
+      ]
     },
     "details": [
       {
@@ -448,31 +340,9 @@
         "output": "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46 OP_COLOR OP_HASH160 9f840a5fc02407ef0ad499c2ec0eb0b942fb0086 OP_EQUAL",
         "redeem": {
           "output": "OP_DUP OP_HASH160 c30afa58ae0673b00a45b5c17dff4633780f1400 OP_EQUALVERIFY OP_CHECKSIG",
-          "input": "3045022100e4fce9ec72b609a2df1dc050c20dcf101d27faefb3e686b7a4cb067becdd5e8e022071287fced53806b08cf39b5ad58bbe614775b3776e98a9f8760af0d4d1d47a9501 03e15819590382a9dd878f01e2f0cbce541564eb415e43b440472d883ecd283058",
-          "witness": []
+          "input": "3045022100e4fce9ec72b609a2df1dc050c20dcf101d27faefb3e686b7a4cb067becdd5e8e022071287fced53806b08cf39b5ad58bbe614775b3776e98a9f8760af0d4d1d47a9501 03e15819590382a9dd878f01e2f0cbce541564eb415e43b440472d883ecd283058"
         },
-        "input": "3045022100e4fce9ec72b609a2df1dc050c20dcf101d27faefb3e686b7a4cb067becdd5e8e022071287fced53806b08cf39b5ad58bbe614775b3776e98a9f8760af0d4d1d47a9501 03e15819590382a9dd878f01e2f0cbce541564eb415e43b440472d883ecd283058 76a914c30afa58ae0673b00a45b5c17dff4633780f140088ac",
-        "witness": []
-      },
-      {
-        "description": "cp2sh-p2wpkh",
-        "address": "4a28F5ZehQNaMsSCEzBGQSKjVx2Wz2c4s32joimPciFTLzRikcE6CvgjgSqziV98NK17Fxhwo8M17V7",
-        "colorId": "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46",
-        "hash": "0432515d8fe8de31be8207987fc6d67b29d5e7cc",
-        "output": "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46 OP_COLOR OP_HASH160 0432515d8fe8de31be8207987fc6d67b29d5e7cc OP_EQUAL",
-        "redeem": {
-          "output": "OP_0 c30afa58ae0673b00a45b5c17dff4633780f1400",
-          "input": "",
-          "witness": [
-            "3045022100e4fce9ec72b609a2df1dc050c20dcf101d27faefb3e686b7a4cb067becdd5e8e022071287fced53806b08cf39b5ad58bbe614775b3776e98a9f8760af0d4d1d47a9501",
-            "03e15819590382a9dd878f01e2f0cbce541564eb415e43b440472d883ecd283058"
-          ]
-        },
-        "input": "0014c30afa58ae0673b00a45b5c17dff4633780f1400",
-        "witness": [
-          "3045022100e4fce9ec72b609a2df1dc050c20dcf101d27faefb3e686b7a4cb067becdd5e8e022071287fced53806b08cf39b5ad58bbe614775b3776e98a9f8760af0d4d1d47a9501",
-          "03e15819590382a9dd878f01e2f0cbce541564eb415e43b440472d883ecd283058"
-        ]
+        "input": "3045022100e4fce9ec72b609a2df1dc050c20dcf101d27faefb3e686b7a4cb067becdd5e8e022071287fced53806b08cf39b5ad58bbe614775b3776e98a9f8760af0d4d1d47a9501 03e15819590382a9dd878f01e2f0cbce541564eb415e43b440472d883ecd283058 76a914c30afa58ae0673b00a45b5c17dff4633780f140088ac"
       }
     ]
   }

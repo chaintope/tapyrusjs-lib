@@ -1,16 +1,17 @@
 import * as assert from 'assert';
 import { beforeEach, describe, it } from 'mocha';
+import * as varuint from 'varuint-bitcoin';
 import { Transaction } from '..';
 import * as bscript from '../src/script';
 import * as fixtures from './fixtures/transaction.json';
 
 describe('Transaction', () => {
-  function fromRaw(raw: any, noWitness?: boolean): Transaction {
+  function fromRaw(raw: any): Transaction {
     const tx = new Transaction();
     tx.version = raw.version;
     tx.locktime = raw.locktime;
 
-    raw.ins.forEach((txIn: any, i: number) => {
+    raw.ins.forEach((txIn: any) => {
       const txHash = Buffer.from(txIn.hash, 'hex');
       let scriptSig;
 
@@ -21,14 +22,6 @@ describe('Transaction', () => {
       }
 
       tx.addInput(txHash, txIn.index, txIn.sequence, scriptSig);
-
-      if (!noWitness && txIn.witness) {
-        const witness = txIn.witness.map((x: string) => {
-          return Buffer.from(x, 'hex');
-        });
-
-        tx.setWitness(i, witness);
-      }
     });
 
     raw.outs.forEach((txOut: any) => {
@@ -56,19 +49,10 @@ describe('Transaction', () => {
 
         assert.strictEqual(actual.toHex(), txHex);
       });
-
-      if (f.whex) {
-        it('imports ' + f.description + ' (' + id + ') as witness', () => {
-          const actual = Transaction.fromHex(f.whex);
-
-          assert.strictEqual(actual.toHex(), f.whex);
-        });
-      }
     }
 
     fixtures.valid.forEach(importExport);
     fixtures.hashForSignature.forEach(importExport);
-    fixtures.hashForWitnessV0.forEach(importExport);
 
     fixtures.invalid.fromBuffer.forEach(f => {
       it('throws on ' + f.exception, () => {
@@ -76,6 +60,20 @@ describe('Transaction', () => {
           Transaction.fromHex(f.hex);
         }, new RegExp(f.exception));
       });
+    });
+
+    it('round-trips a transaction with no inputs', () => {
+      const tx = new Transaction();
+      tx.addOutput(
+        bscript.fromASM(
+          'OP_DUP OP_HASH160 4c9c3dfac4207d5d8cb89df5722cb3d712385e3f ' +
+            'OP_EQUALVERIFY OP_CHECKSIG',
+        ),
+        1000,
+      );
+      const hex = tx.toHex();
+
+      assert.strictEqual(Transaction.fromHex(hex).toHex(), hex);
     });
 
     it('.version should be interpreted as an int32le', () => {
@@ -89,16 +87,9 @@ describe('Transaction', () => {
   describe('toBuffer/toHex', () => {
     fixtures.valid.forEach(f => {
       it('exports ' + f.description + ' (' + f.id + ')', () => {
-        const actual = fromRaw(f.raw, true);
+        const actual = fromRaw(f.raw);
         assert.strictEqual(actual.toHex(), f.hex);
       });
-
-      if (f.whex) {
-        it('exports ' + f.description + ' (' + f.id + ') as witness', () => {
-          const wactual = fromRaw(f.raw);
-          assert.strictEqual(wactual.toHex(), f.whex);
-        });
-      }
     });
 
     it('accepts target Buffer and offset parameters', () => {
@@ -120,35 +111,28 @@ describe('Transaction', () => {
     });
   });
 
-  describe('hasWitnesses', () => {
-    fixtures.valid.forEach(f => {
-      it(
-        'detects if the transaction has witnesses: ' +
-          (f.whex ? 'true' : 'false'),
-        () => {
-          assert.strictEqual(
-            Transaction.fromHex(f.whex ? f.whex : f.hex).hasWitnesses(),
-            !!f.whex,
-          );
-        },
-      );
+  describe('byteLength', () => {
+    it('counts the scriptSig of every input', () => {
+      fixtures.valid.forEach(f => {
+        const tx = fromRaw(f.raw);
+        assert.strictEqual(tx.byteLength(), f.hex.length / 2);
+      });
     });
   });
 
-  describe('weight/virtualSize', () => {
-    it('computes virtual size', () => {
+  describe('byteLengthMalFix', () => {
+    it('leaves out the scriptSig of every input', () => {
       fixtures.valid.forEach(f => {
-        const transaction = Transaction.fromHex(f.whex ? f.whex : f.hex);
+        const tx = fromRaw(f.raw);
+        const scriptSigs = tx.ins.reduce(
+          (sum, input) =>
+            sum +
+            varuint.encodingLength(input.script.length) +
+            input.script.length,
+          0,
+        );
 
-        assert.strictEqual(transaction.virtualSize(), f.virtualSize);
-      });
-    });
-
-    it('computes weight', () => {
-      fixtures.valid.forEach(f => {
-        const transaction = Transaction.fromHex(f.whex ? f.whex : f.hex);
-
-        assert.strictEqual(transaction.weight(), f.weight);
+        assert.strictEqual(tx.byteLengthMalFix(), tx.byteLength() - scriptSigs);
       });
     });
   });
@@ -168,12 +152,11 @@ describe('Transaction', () => {
       assert.strictEqual(tx.addInput(prevTxHash, 0), 1);
     });
 
-    it('defaults to empty script, witness and 0xffffffff SEQUENCE number', () => {
+    it('defaults to empty script and 0xffffffff SEQUENCE number', () => {
       const tx = new Transaction();
       tx.addInput(prevTxHash, 0);
 
       assert.strictEqual(tx.ins[0].script.length, 0);
-      assert.strictEqual(tx.ins[0].witness.length, 0);
       assert.strictEqual(tx.ins[0].sequence, 0xffffffff);
     });
 
@@ -220,7 +203,7 @@ describe('Transaction', () => {
   describe('getHash/getId', () => {
     function verify(f: any): void {
       it('should return the id for ' + f.id + '(' + f.description + ')', () => {
-        const tx = Transaction.fromHex(f.whex || f.hex);
+        const tx = Transaction.fromHex(f.hex);
 
         assert.strictEqual(tx.getHash().toString('hex'), f.hash);
         assert.strictEqual(tx.getId(), f.id);
@@ -303,36 +286,6 @@ describe('Transaction', () => {
           );
         },
       );
-    });
-  });
-
-  describe('hashForWitnessV0', () => {
-    fixtures.hashForWitnessV0.forEach(f => {
-      it(
-        'should return ' +
-          f.hash +
-          ' for ' +
-          (f.description ? 'case "' + f.description + '"' : ''),
-        () => {
-          const tx = Transaction.fromHex(f.txHex);
-          const script = bscript.fromASM(f.script);
-
-          assert.strictEqual(
-            tx
-              .hashForWitnessV0(f.inIndex, script, f.value, f.type)
-              .toString('hex'),
-            f.hash,
-          );
-        },
-      );
-    });
-  });
-
-  describe('setWitness', () => {
-    it('only accepts a a witness stack (Array of Buffers)', () => {
-      assert.throws(() => {
-        (new Transaction().setWitness as any)(0, 'foobar');
-      }, /Expected property "1" of type \[Buffer], got String "foobar"/);
     });
   });
 });

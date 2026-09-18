@@ -1,6 +1,6 @@
 'use strict';
 Object.defineProperty(exports, '__esModule', { value: true });
-exports.util = exports.p2wsh = exports.p2wpkh = exports.p2sh = exports.p2pkh = exports.p2pk = exports.p2ms = exports.embed = exports.cp2sh = exports.cp2pkh = void 0;
+exports.util = exports.p2sh = exports.p2pkh = exports.p2pk = exports.p2ms = exports.embed = exports.cp2sh = exports.cp2pkh = void 0;
 const cp2pkh_1 = require('./cp2pkh');
 Object.defineProperty(exports, 'cp2pkh', {
   enumerable: true,
@@ -50,21 +50,5 @@ Object.defineProperty(exports, 'p2sh', {
     return p2sh_1.p2sh;
   },
 });
-const p2wpkh_1 = require('./p2wpkh');
-Object.defineProperty(exports, 'p2wpkh', {
-  enumerable: true,
-  get: function() {
-    return p2wpkh_1.p2wpkh;
-  },
-});
-const p2wsh_1 = require('./p2wsh');
-Object.defineProperty(exports, 'p2wsh', {
-  enumerable: true,
-  get: function() {
-    return p2wsh_1.p2wsh;
-  },
-});
 const util = require('./util');
 exports.util = util;
-// TODO
-// witness commitment

@@ -34,7 +34,7 @@ export interface PsbtTxOutput extends TransactionOutput {
  *   Combine checks if the internal bitcoin transaction is the same, so be sure that
  *   all sequences, version, locktime, etc. are the same before combining.
  * Input Finalizer: This role is fairly important. Not only does it need to construct
- *   the input scriptSigs and witnesses, but it SHOULD verify the signatures etc.
+ *   the input scriptSigs, but it SHOULD verify the signatures etc.
  *   Before running `psbt.finalizeAllInputs()` please run `psbt.validateSignaturesOfAllInputs()`
  *   Running any finalize method will delete any data in the input(s) that are no longer
  *   needed due to the finalized scripts containing the information.
@@ -145,16 +145,13 @@ interface HDSignerAsync extends HDSignerBase {
  * This function must do two things:
  * 1. Check if the `input` can be finalized. If it can not be finalized, throw.
  *   ie. `Can not finalize input #${inputIndex}`
- * 2. Create the finalScriptSig and finalScriptWitness Buffers.
+ * 2. Create the finalScriptSig Buffer.
  */
 type FinalScriptsFunc = (inputIndex: number, // Which input is it?
 input: PsbtInput, // The PSBT input contents
 script: Buffer, // The "meaningful" locking script Buffer (redeemScript for P2SH etc.)
-isSegwit: boolean, // Is it segwit?
-isP2SH: boolean, // Is it P2SH?
-isP2WSH: boolean) => {
+isP2SH: boolean) => {
     finalScriptSig: Buffer | undefined;
-    finalScriptWitness: Buffer | undefined;
 };
-type AllScriptType = 'witnesspubkeyhash' | 'pubkeyhash' | 'multisig' | 'pubkey' | 'nonstandard' | 'p2sh-witnesspubkeyhash' | 'p2sh-pubkeyhash' | 'p2sh-multisig' | 'p2sh-pubkey' | 'p2sh-nonstandard' | 'p2wsh-pubkeyhash' | 'p2wsh-multisig' | 'p2wsh-pubkey' | 'p2wsh-nonstandard' | 'p2sh-p2wsh-pubkeyhash' | 'p2sh-p2wsh-multisig' | 'p2sh-p2wsh-pubkey' | 'p2sh-p2wsh-nonstandard';
+type AllScriptType = 'pubkeyhash' | 'multisig' | 'pubkey' | 'nonstandard' | 'p2sh-pubkeyhash' | 'p2sh-multisig' | 'p2sh-pubkey' | 'p2sh-nonstandard';
 export {};
