@@ -181,9 +181,17 @@ describe('schnorr', () => {
       );
     });
 
+    it('rejects a public key that is valid but not the signer', () => {
+      // x = 0x0202... is a point on the curve, so this is a well formed key
+      // that simply did not produce the signature
+      assert.strictEqual(
+        schnorr.verify(Buffer.alloc(33, 0x02), KAT.hash, signature),
+        false,
+      );
+    });
+
     it('rejects a malformed public key', () => {
       const cases = [
-        Buffer.alloc(33, 0x02), // x = 0x0202..., not on the curve
         Buffer.concat([Buffer.from([0x02]), Buffer.alloc(32, 0xff)]), // x >= p
         Buffer.concat([
           Buffer.from([0x02]),
