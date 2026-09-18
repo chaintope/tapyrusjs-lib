@@ -4,12 +4,7 @@ import { ECPair, Metadata, NetworkId } from '..';
 import * as fixtures from './fixtures/tip0020_metadata.json';
 
 /** The part of the fetch Response that Metadata.fetch uses. */
-interface FetchResponse {
-  ok: boolean;
-  status: number;
-  statusText: string;
-  text(): Promise<string>;
-}
+type FetchResponse = Pick<Response, 'ok' | 'status' | 'statusText' | 'text'>;
 
 // Helper to determine tokenType based on test case
 function getTokenType(f: any): 'reissuable' | 'nft' {
@@ -135,12 +130,18 @@ describe('Metadata', () => {
       assert.strictEqual(metadata.decimals, 8);
     });
 
-    it('throws on invalid JSON', () => {
+    it('throws when symbol is missing', () => {
       assert.throws(() => {
         Metadata.fromJSON(
           '{"version":"1.0","name":"Test","tokenType":"reissuable"}',
         );
       }, /symbol is required/);
+    });
+
+    it('throws on invalid JSON', () => {
+      assert.throws(() => {
+        Metadata.fromJSON('not json');
+      }, SyntaxError);
     });
   });
 
@@ -541,8 +542,9 @@ describe('Metadata', () => {
         };
       }) as any;
 
-      await assert.rejects(() =>
-        Metadata.fetch(colorId, NetworkId.TAPYRUS_API),
+      await assert.rejects(
+        () => Metadata.fetch(colorId, NetworkId.TAPYRUS_API),
+        SyntaxError,
       );
     });
 
