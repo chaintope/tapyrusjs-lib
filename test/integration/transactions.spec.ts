@@ -203,9 +203,8 @@ describe('tapyrusjs-lib (transactions with psbt)', () => {
 
     // build and broadcast to the Tapyrus node
     await regtestUtils.broadcast(tx.toHex());
-    const txHash = bitcoin.bufferutils
-      .reverseBuffer(tx.getHash())
-      .toString('hex');
+    // an outpoint, and the node's own txid, refer to the hashMalFix
+    const txHash = tx.getId();
     await regtestUtils.verify({
       txId: txHash,
       address: regtestUtils.RANDOM_ADDRESS,
@@ -235,9 +234,8 @@ describe('tapyrusjs-lib (transactions with psbt)', () => {
       psbt.finalizeAllInputs();
       const tx = psbt.extractTransaction();
       await regtestUtils.broadcast(tx.toHex());
-      const txHash = bitcoin.bufferutils
-        .reverseBuffer(tx.getHash())
-        .toString('hex');
+      // an outpoint, and the node's own txid, refer to the hashMalFix
+      const txHash = tx.getId();
       await regtestUtils.verify({
         txId: txHash,
         address: regtestUtils.RANDOM_ADDRESS,
@@ -298,9 +296,8 @@ describe('tapyrusjs-lib (transactions with psbt)', () => {
 
     // build and broadcast to the Tapyrus node
     await regtestUtils.broadcast(tx.toHex());
-    const txHash = bitcoin.bufferutils
-      .reverseBuffer(tx.getHash())
-      .toString('hex');
+    // an outpoint, and the node's own txid, refer to the hashMalFix
+    const txHash = tx.getId();
     await regtestUtils.verify({
       txId: txHash,
       address: regtestUtils.RANDOM_ADDRESS,

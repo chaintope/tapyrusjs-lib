@@ -99,9 +99,8 @@ describe('tapyrusjs-lib (transactions w/ CLTV)', () => {
       tx.setInputScript(0, redeemScriptSig!);
 
       await regtestUtils.broadcast(tx.toHex());
-      const hash = bitcoin.bufferutils
-        .reverseBuffer(tx.getHash())
-        .toString('hex');
+      // an outpoint, and the node's own txid, refer to the hashMalFix
+      const hash = tx.getId();
       await regtestUtils.verify({
         txId: hash,
         address: regtestUtils.RANDOM_ADDRESS,
@@ -154,9 +153,8 @@ describe('tapyrusjs-lib (transactions w/ CLTV)', () => {
       // into the future!
       await regtestUtils.mine(5);
       await regtestUtils.broadcast(tx.toHex());
-      const hash = bitcoin.bufferutils
-        .reverseBuffer(tx.getHash())
-        .toString('hex');
+      // an outpoint, and the node's own txid, refer to the hashMalFix
+      const hash = tx.getId();
       await regtestUtils.verify({
         txId: hash,
         address: regtestUtils.RANDOM_ADDRESS,
@@ -205,9 +203,8 @@ describe('tapyrusjs-lib (transactions w/ CLTV)', () => {
       tx.setInputScript(0, redeemScriptSig!);
 
       await regtestUtils.broadcast(tx.toHex());
-      const hash = bitcoin.bufferutils
-        .reverseBuffer(tx.getHash())
-        .toString('hex');
+      // an outpoint, and the node's own txid, refer to the hashMalFix
+      const hash = tx.getId();
       await regtestUtils.verify({
         txId: hash,
         address: regtestUtils.RANDOM_ADDRESS,
