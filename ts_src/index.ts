@@ -2,6 +2,7 @@ import { BIP32Factory, BIP32Interface } from 'bip32';
 import * as ecc from 'tiny-secp256k1';
 import * as address from './address';
 import * as bufferutils from './bufferutils';
+import * as coloridentifier from './coloridentifier';
 import * as crypto from './crypto';
 import * as ECPair from './ecpair';
 import * as networks from './networks';
@@ -17,6 +18,7 @@ export {
   address,
   bip32,
   bufferutils,
+  coloridentifier,
   crypto,
   networks,
   payments,
@@ -25,13 +27,13 @@ export {
 };
 
 export { Block } from './block';
+export { OutPoint } from './coloridentifier';
 export {
   Metadata,
   Issuer,
   Attribute,
   MetadataFields,
   TokenType,
-  OutPoint,
   RegistryEntry,
 } from './metadata';
 export { Psbt, PsbtTxInput, PsbtTxOutput } from './psbt';

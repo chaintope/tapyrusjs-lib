@@ -245,6 +245,23 @@ describe('Metadata', () => {
         assert.strictEqual(colorId[0], 0xc1);
       });
 
+      it('pins the derivation to a fixed vector', () => {
+        const metadata = new Metadata({
+          version: '1.0',
+          name: 'Reissuable Token',
+          symbol: 'REIS',
+          tokenType: 'reissuable',
+        });
+        const publicKey = Buffer.from(
+          '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
+          'hex',
+        );
+        assert.strictEqual(
+          metadata.deriveColorId(publicKey).toString('hex'),
+          'c1bc7b4d1c08a70f33035d421f698a5886657296babed4c5dbd488b8ab8bc3b886',
+        );
+      });
+
       it('throws without publicKey', () => {
         const metadata = new Metadata({
           version: '1.0',

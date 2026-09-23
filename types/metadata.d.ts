@@ -1,3 +1,4 @@
+import { OutPoint } from './coloridentifier';
 import { Network, NetworkId } from './networks';
 export interface Issuer {
     name?: string;
@@ -10,10 +11,7 @@ export interface Attribute {
     display_type?: string;
 }
 export type TokenType = 'reissuable' | 'non_reissuable' | 'nft';
-export interface OutPoint {
-    txid: Buffer;
-    index: number;
-}
+export { OutPoint };
 export interface RegistryEntry {
     metadata: Metadata;
     paymentBase: Buffer;

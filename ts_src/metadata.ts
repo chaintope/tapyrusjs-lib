@@ -1,3 +1,5 @@
+import * as coloridentifier from './coloridentifier';
+import { OutPoint } from './coloridentifier';
 import * as crypto from './crypto';
 import { Network, NetworkId } from './networks';
 import * as payments from './payments';
@@ -25,10 +27,7 @@ export interface Attribute {
 
 export type TokenType = 'reissuable' | 'non_reissuable' | 'nft';
 
-export interface OutPoint {
-  txid: Buffer;
-  index: number;
-}
+export { OutPoint };
 
 export interface RegistryEntry {
   metadata: Metadata;
@@ -467,47 +466,22 @@ export class Metadata {
         if (!publicKey) {
           throw new Error('publicKey is required for reissuable token');
         }
-        const p2cPubKey = this.p2cPublicKey(publicKey);
-        const pubKeyHash = crypto.hash160(p2cPubKey);
-        // P2PKH script: OP_DUP OP_HASH160 <20bytes> OP_EQUALVERIFY OP_CHECKSIG
-        const script = Buffer.alloc(25);
-        script[0] = 0x76; // OP_DUP
-        script[1] = 0xa9; // OP_HASH160
-        script[2] = 0x14; // 20 bytes
-        pubKeyHash.copy(script, 3);
-        script[23] = 0x88; // OP_EQUALVERIFY
-        script[24] = 0xac; // OP_CHECKSIG
-        const scriptHash = crypto.sha256(script);
-        const colorId = Buffer.alloc(33);
-        colorId[0] = COLOR_ID_REISSUABLE;
-        scriptHash.copy(colorId, 1);
-        return colorId;
+        const { output } = payments.p2pkh({
+          pubkey: this.p2cPublicKey(publicKey),
+        });
+        return coloridentifier.reissuable(output!);
       }
       case 'non_reissuable': {
         if (!outPoint) {
           throw new Error('outPoint is required for non_reissuable token');
         }
-        const outPointPayload = Buffer.alloc(36);
-        outPoint.txid.copy(outPointPayload, 0);
-        outPointPayload.writeUInt32LE(outPoint.index, 32);
-        const outPointHash = crypto.sha256(outPointPayload);
-        const colorId = Buffer.alloc(33);
-        colorId[0] = COLOR_ID_NON_REISSUABLE;
-        outPointHash.copy(colorId, 1);
-        return colorId;
+        return coloridentifier.nonReissuable(outPoint);
       }
       case 'nft': {
         if (!outPoint) {
           throw new Error('outPoint is required for nft token');
         }
-        const outPointPayload = Buffer.alloc(36);
-        outPoint.txid.copy(outPointPayload, 0);
-        outPointPayload.writeUInt32LE(outPoint.index, 32);
-        const outPointHash = crypto.sha256(outPointPayload);
-        const colorId = Buffer.alloc(33);
-        colorId[0] = COLOR_ID_NFT;
-        outPointHash.copy(colorId, 1);
-        return colorId;
+        return coloridentifier.nft(outPoint);
       }
       default:
         throw new Error('Invalid token type');
