@@ -23,7 +23,7 @@ const bob = bitcoin.ECPair.fromWIF(
   regtest,
 );
 
-describe('bitcoinjs-lib (transactions w/ CLTV)', () => {
+describe('tapyrusjs-lib (transactions w/ CLTV)', () => {
   // force update MTP
   before(async () => {
     await regtestUtils.mine(11);
@@ -63,7 +63,7 @@ describe('bitcoinjs-lib (transactions w/ CLTV)', () => {
 
   // expiry past, {Alice's signature} OP_TRUE
   it(
-    'can create (and broadcast via 3PBP) a Transaction where Alice can redeem ' +
+    'can create (and broadcast to a node) a Transaction where Alice can redeem ' +
       'the output after the expiry (in the past)',
     async () => {
       // 3 hours ago
@@ -113,7 +113,7 @@ describe('bitcoinjs-lib (transactions w/ CLTV)', () => {
 
   // expiry will pass, {Alice's signature} OP_TRUE
   it(
-    'can create (and broadcast via 3PBP) a Transaction where Alice can redeem ' +
+    'can create (and broadcast to a node) a Transaction where Alice can redeem ' +
       'the output after the expiry (in the future)',
     async () => {
       const height = await regtestUtils.height();
@@ -168,7 +168,7 @@ describe('bitcoinjs-lib (transactions w/ CLTV)', () => {
 
   // expiry ignored, {Bob's signature} {Alice's signature} OP_FALSE
   it(
-    'can create (and broadcast via 3PBP) a Transaction where Alice and Bob can ' +
+    'can create (and broadcast to a node) a Transaction where Alice and Bob can ' +
       'redeem the output at any time',
     async () => {
       // two hours ago
@@ -219,7 +219,7 @@ describe('bitcoinjs-lib (transactions w/ CLTV)', () => {
 
   // expiry in the future, {Alice's signature} OP_TRUE
   it(
-    'can create (but fail to broadcast via 3PBP) a Transaction where Alice ' +
+    'can create (but fail to broadcast to a node) a Transaction where Alice ' +
       'attempts to redeem before the expiry',
     async () => {
       // two hours from now

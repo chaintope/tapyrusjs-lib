@@ -5,7 +5,6 @@ import * as bitcoin from '../..';
 import { regtestUtils } from './_regtest';
 const regtest = regtestUtils.network;
 const bip68 = require('bip68');
-const varuint = require('varuint-bitcoin');
 
 function toOutputScript(address: string): Buffer {
   return bitcoin.address.toOutputScript(address, regtest);
@@ -32,7 +31,7 @@ const dave = bitcoin.ECPair.fromWIF(
   regtest,
 );
 
-describe('bitcoinjs-lib (transactions w/ CSV)', () => {
+describe('tapyrusjs-lib (transactions w/ CSV)', () => {
   // force update MTP
   before(async () => {
     await regtestUtils.mine(11);
@@ -74,7 +73,7 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
   /* tslint:disable-next-line */
   // Ref: https://github.com/bitcoinbook/bitcoinbook/blob/f8b883dcd4e3d1b9adf40fed59b7e898fbd9241f/ch07.asciidoc#complex-script-example
 
-  // Note: bitcoinjs-lib will not offer specific support for problems with
+  // Note: tapyrusjs-lib will not offer specific support for problems with
   //       advanced script usages such as below. Use at your own risk.
   function complexCsvOutput(
     _alice: KeyPair,
@@ -117,7 +116,7 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
 
   // expiry will pass, {Alice's signature} OP_TRUE
   it(
-    'can create (and broadcast via 3PBP) a Transaction where Alice can redeem ' +
+    'can create (and broadcast to a node) a Transaction where Alice can redeem ' +
       'the output after the expiry (in the future) (simple CHECKSEQUENCEVERIFY)',
     async () => {
       // 5 blocks from now
@@ -174,7 +173,7 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
 
   // expiry in the future, {Alice's signature} OP_TRUE
   it(
-    'can create (but fail to broadcast via 3PBP) a Transaction where Alice ' +
+    'can create (but fail to broadcast to a node) a Transaction where Alice ' +
       'attempts to redeem before the expiry (simple CHECKSEQUENCEVERIFY)',
     async () => {
       // two hours after confirmation
@@ -227,7 +226,7 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
 
   // Check first combination of complex CSV, 2 of 3
   it(
-    'can create (and broadcast via 3PBP) a Transaction where Bob and Charles ' +
+    'can create (and broadcast to a node) a Transaction where Bob and Charles ' +
       'can send (complex CHECKSEQUENCEVERIFY)',
     async () => {
       // 2 blocks from now
@@ -296,7 +295,7 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
 
   // Check first combination of complex CSV, mediator + 1 of 3 after 2 blocks
   it(
-    'can create (and broadcast via 3PBP) a Transaction where Alice (mediator) ' +
+    'can create (and broadcast to a node) a Transaction where Alice (mediator) ' +
       'and Bob can send after 2 blocks (complex CHECKSEQUENCEVERIFY)',
     async () => {
       // 2 blocks from now
@@ -368,7 +367,7 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
 
   // Check first combination of complex CSV, mediator after 5 blocks
   it(
-    'can create (and broadcast via 3PBP) a Transaction where Alice (mediator) ' +
+    'can create (and broadcast to a node) a Transaction where Alice (mediator) ' +
       'can send after 5 blocks (complex CHECKSEQUENCEVERIFY)',
     async () => {
       // 2 blocks from now
@@ -442,12 +441,9 @@ function csvGetFinalScripts(
   inputIndex: number,
   input: PsbtInput,
   script: Buffer,
-  isSegwit: boolean,
   isP2SH: boolean,
-  isP2WSH: boolean,
 ): {
   finalScriptSig: Buffer | undefined;
-  finalScriptWitness: Buffer | undefined;
 } {
   // Step 1: Check to make sure the meaningful script matches what you expect.
   const decompiled = bitcoin.script.decompile(script);
@@ -471,52 +467,13 @@ function csvGetFinalScripts(
       bitcoin.opcodes.OP_TRUE,
     ]),
   };
-  if (isP2WSH && isSegwit)
-    payment = bitcoin.payments.p2wsh({
-      network: regtest,
-      redeem: payment,
-    });
   if (isP2SH)
     payment = bitcoin.payments.p2sh({
       network: regtest,
       redeem: payment,
     });
 
-  function witnessStackToScriptWitness(witness: Buffer[]): Buffer {
-    let buffer = Buffer.allocUnsafe(0);
-
-    function writeSlice(slice: Buffer): void {
-      buffer = Buffer.concat([buffer, Buffer.from(slice)]);
-    }
-
-    function writeVarInt(i: number): void {
-      const currentLen = buffer.length;
-      const varintLen = varuint.encodingLength(i);
-
-      buffer = Buffer.concat([buffer, Buffer.allocUnsafe(varintLen)]);
-      varuint.encode(i, buffer, currentLen);
-    }
-
-    function writeVarSlice(slice: Buffer): void {
-      writeVarInt(slice.length);
-      writeSlice(slice);
-    }
-
-    function writeVector(vector: Buffer[]): void {
-      writeVarInt(vector.length);
-      vector.forEach(writeVarSlice);
-    }
-
-    writeVector(witness);
-
-    return buffer;
-  }
-
   return {
     finalScriptSig: payment.input,
-    finalScriptWitness:
-      payment.witness && payment.witness.length > 0
-        ? witnessStackToScriptWitness(payment.witness)
-        : undefined,
   };
 }
