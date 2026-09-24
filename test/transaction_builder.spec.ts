@@ -2,11 +2,13 @@ import * as assert from 'assert';
 import { beforeEach, describe, it } from 'mocha';
 import {
   ECPair,
+  ECPairInterface,
   networks as NETWORKS,
   Transaction,
   TransactionBuilder,
 } from '..';
 import * as baddress from '../src/address';
+import { reverseBuffer } from '../src/bufferutils';
 import * as payments from '../src/payments';
 import * as bscript from '../src/script';
 
@@ -264,6 +266,8 @@ for (const useOldSignArgs of [false, true]) {
 
       it('accepts a prevTx, index [and sequence number]', () => {
         const prevTx = new Transaction();
+        // a non-empty scriptSig, so that getHash() and getMalFixHash() differ
+        prevTx.addInput(Buffer.alloc(32, 1), 0, undefined, scripts[0]);
         prevTx.addOutput(scripts[0], 0);
         prevTx.addOutput(scripts[1], 1);
 
@@ -271,7 +275,13 @@ for (const useOldSignArgs of [false, true]) {
         assert.strictEqual(vin, 0);
 
         const txIn = (txb as any).__TX.ins[0];
-        assert.deepStrictEqual(txIn.hash, prevTx.getHash());
+        // the outpoint refers to the Tapyrus txid, which omits the scriptSig
+        assert.notDeepStrictEqual(prevTx.getMalFixHash(), prevTx.getHash());
+        assert.deepStrictEqual(txIn.hash, prevTx.getMalFixHash());
+        assert.strictEqual(
+          reverseBuffer(Buffer.from(txIn.hash)).toString('hex'),
+          prevTx.getId(),
+        );
         assert.strictEqual(txIn.index, 1);
         assert.strictEqual(txIn.sequence, 54);
         assert.strictEqual((txb as any).__INPUTS[0].prevOutScript, scripts[1]);
@@ -736,6 +746,180 @@ for (const useOldSignArgs of [false, true]) {
 
     describe('various edge case', () => {
       const network = NETWORKS.dev;
+
+      const edgeKey = ECPair.fromPrivateKey(Buffer.alloc(32, 0x01), {
+        network,
+      });
+      const edgeColorId = Buffer.concat([
+        Buffer.from([0xc1]),
+        Buffer.alloc(32, 0x11),
+      ]);
+      const edgeP2pkh = payments.p2pkh({
+        pubkey: edgeKey.publicKey,
+        network,
+      });
+
+      function prevTxWith(outs: Array<{ script: Buffer; value: number }>) {
+        const tx = new Transaction();
+        tx.addInput(Buffer.alloc(32, 0x09), 0);
+        outs.forEach(o => tx.addOutput(o.script, o.value));
+        return tx;
+      }
+
+      // the deprecated positional form takes no prevOutScriptType, so these
+      // exercise whichever API this pass is for
+      function edgeSign(
+        txb: TransactionBuilder,
+        vin: number,
+        keyPair: ECPairInterface,
+        prevOutScriptType: string,
+        redeemScript?: Buffer,
+      ): void {
+        if (useOldSignArgs) txb.sign(vin, keyPair, redeemScript);
+        else txb.sign({ prevOutScriptType, vin, keyPair, redeemScript });
+      }
+
+      it('signs a cp2sh input when the prevOutScript is known', () => {
+        const redeem = payments.p2pkh({
+          pubkey: edgeKey.publicKey,
+          network,
+        });
+        const cp2sh = payments.cp2sh({
+          redeem,
+          colorId: edgeColorId,
+          network,
+        });
+        const prevTx = prevTxWith([{ script: cp2sh.output!, value: 100 }]);
+
+        const txb = new TransactionBuilder(network);
+        txb.setVersion(1);
+        txb.addInput(prevTx, 0);
+        txb.addOutput(cp2sh.output!, 100);
+        edgeSign(txb, 0, edgeKey, 'cp2sh', redeem.output);
+
+        const tx = txb.build();
+        const sig = bscript.decompile(tx.ins[0].script)![0] as Buffer;
+        const decoded = bscript.signature.decode(sig);
+        const hash = tx.hashForSignature(0, redeem.output!, decoded.hashType);
+
+        assert.strictEqual(edgeKey.verify(hash, decoded.signature), true);
+      });
+
+      // checkSignArgs only runs for the object form, so this one is not
+      // parameterised over useOldSignArgs
+      it('refuses to sign a coloured input restored from a transaction', () => {
+        const cp2pkh = payments.cp2pkh({
+          pubkey: edgeKey.publicKey,
+          colorId: edgeColorId,
+          network,
+        });
+        const prevTx = prevTxWith([{ script: cp2pkh.output!, value: 100 }]);
+
+        const signed = new TransactionBuilder(network);
+        signed.setVersion(1);
+        signed.addInput(prevTx, 0);
+        signed.addOutput(cp2pkh.output!, 100);
+        signed.sign({ prevOutScriptType: 'cp2pkh', vin: 0, keyPair: edgeKey });
+
+        const restored = TransactionBuilder.fromTransaction(
+          signed.build(),
+          network,
+        );
+
+        assert.throws(() => {
+          restored.sign({
+            prevOutScriptType: 'cp2pkh',
+            vin: 0,
+            keyPair: edgeKey,
+          });
+        }, new RegExp('previous output script is a guess'));
+      });
+
+      it('signs a cp2sh multisig input without the prevOutScript', () => {
+        const other = ECPair.fromPrivateKey(Buffer.alloc(32, 0x02), {
+          network,
+        });
+        const redeem = payments.p2ms({
+          m: 2,
+          pubkeys: [edgeKey.publicKey, other.publicKey],
+          network,
+        });
+        const cp2sh = payments.cp2sh({
+          redeem,
+          colorId: edgeColorId,
+          network,
+        });
+        const prevTx = prevTxWith([{ script: cp2sh.output!, value: 100 }]);
+        const txid = reverseBuffer(
+          Buffer.from(prevTx.getMalFixHash()),
+        ).toString('hex');
+
+        // the colour is only in the output being spent, which is not given here
+        const txb = new TransactionBuilder(network);
+        txb.setVersion(1);
+        txb.addInput(txid, 0);
+        txb.addOutput(cp2sh.output!, 100);
+        edgeSign(txb, 0, edgeKey, 'cp2sh', redeem.output);
+        edgeSign(txb, 0, other, 'cp2sh', redeem.output);
+
+        const tx = txb.build();
+        const chunks = bscript.decompile(tx.ins[0].script)!;
+        const hash = tx.hashForSignature(
+          0,
+          redeem.output!,
+          Transaction.SIGHASH_ALL,
+        );
+
+        assert.strictEqual(chunks.length, 4); // OP_0, two signatures, redeem
+        assert.ok((chunks[3] as Buffer).equals(redeem.output!));
+        for (const key of [edgeKey, other]) {
+          const signed = [chunks[1], chunks[2]].some(c => {
+            const decoded = bscript.signature.decode(c as Buffer);
+            return key.verify(hash, decoded.signature);
+          });
+          assert.strictEqual(signed, true);
+        }
+      });
+
+      it('does not count coloured amounts as fees', () => {
+        const cp2pkh = payments.cp2pkh({
+          pubkey: edgeKey.publicKey,
+          colorId: edgeColorId,
+          network,
+        });
+        // 10,000,000 tokens plus 10,000 TPC in, 9,000 TPC out:
+        // the real fee is 1,000 and the tokens are burnt
+        const prevTx = prevTxWith([
+          { script: cp2pkh.output!, value: 10000000 },
+          { script: edgeP2pkh.output!, value: 10000 },
+        ]);
+
+        const txb = new TransactionBuilder(network);
+        txb.setVersion(1);
+        txb.addInput(prevTx, 0);
+        txb.addInput(prevTx, 1);
+        txb.addOutput(edgeP2pkh.output!, 9000);
+        edgeSign(txb, 0, edgeKey, 'cp2pkh');
+        edgeSign(txb, 1, edgeKey, 'p2pkh');
+
+        assert.doesNotThrow(() => txb.build());
+      });
+
+      it('detects an absurd fee above 2^32 satoshi', () => {
+        const prevTx = prevTxWith([
+          { script: edgeP2pkh.output!, value: 4295167296 },
+        ]);
+
+        const txb = new TransactionBuilder(network);
+        txb.setVersion(1);
+        txb.addInput(prevTx, 0);
+        txb.addOutput(edgeP2pkh.output!, 1000);
+        edgeSign(txb, 0, edgeKey, 'p2pkh');
+
+        assert.throws(() => {
+          txb.build();
+        }, new RegExp('Transaction has absurd fees'));
+      });
 
       it('should handle badly pre-filled OP_0s', () => {
         // OP_0 is used where a signature is missing

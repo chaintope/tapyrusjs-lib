@@ -27,6 +27,19 @@ const PREVOUT_TYPES = new Set([
   'p2sh-p2pk',
   'p2sh-p2ms',
 ]);
+/** The output type of a script, or undefined when it can not be parsed. */
+function outputTypeOf(script) {
+  if (!script) return undefined;
+  try {
+    return classify.output(script);
+  } catch (e) {
+    return undefined;
+  }
+}
+function isColoredScript(script) {
+  const type = outputTypeOf(script);
+  return type === SCRIPT_TYPES.CP2PKH || type === SCRIPT_TYPES.CP2SH;
+}
 function tfMessage(type, value, message) {
   try {
     typeforce(type, value);
@@ -119,9 +132,10 @@ class TransactionBuilder {
       // is it a Transaction object?
     } else if (txIsTransaction(txHash)) {
       const txOut = txHash.outs[vout];
+      if (!txOut) throw new Error('No output at index: ' + vout);
       prevOutScript = txOut.script;
       value = txOut.value;
-      txHash = txHash.getHash();
+      txHash = txHash.getMalFixHash();
     }
     return this.__addInputUnsafe(txHash, vout, {
       sequence,
@@ -281,11 +295,16 @@ class TransactionBuilder {
     });
   }
   __overMaximumFees(bytes) {
-    // not all inputs will have .value defined
-    const incoming = this.__INPUTS.reduce((a, x) => a + (x.value >>> 0), 0);
-    // but all outputs do, and if we have any input value
-    // we can immediately determine if the outputs are too small
-    const outgoing = this.__TX.outs.reduce((a, x) => a + x.value, 0);
+    // A coloured input or output carries a token amount, not TPC, so it must
+    // not enter the fee calculation. Inputs without a known value count as 0.
+    const incoming = this.__INPUTS.reduce(
+      (a, x) => (isColoredScript(x.prevOutScript) ? a : a + (x.value || 0)),
+      0,
+    );
+    const outgoing = this.__TX.outs.reduce(
+      (a, x) => (isColoredScript(x.script) ? a : a + x.value),
+      0,
+    );
     const fee = incoming - outgoing;
     const feeRate = fee / bytes;
     return feeRate > this.maximumFeeRate;
@@ -305,6 +324,7 @@ function expandInput(scriptSig, type, scriptPubKey) {
       });
       return {
         prevOutScript: output,
+        prevOutScriptInferred: true,
         prevOutType: SCRIPT_TYPES.P2PKH,
         pubkeys: [pubkey],
         signatures: [signature],
@@ -343,6 +363,7 @@ function expandInput(scriptSig, type, scriptPubKey) {
     if (!expanded.prevOutType) return {};
     return {
       prevOutScript: output,
+      prevOutScriptInferred: true,
       prevOutType: SCRIPT_TYPES.P2SH,
       redeemScript: redeem.output,
       redeemScriptType: expanded.prevOutType,
@@ -433,20 +454,35 @@ function expandOutput(script, ourPubKey) {
   }
   return { type };
 }
-function prepareInput(input, ourPubKey, redeemScript) {
+function prepareInput(input, ourPubKey, redeemScript, prevOutScriptType) {
   if (redeemScript) {
-    const p2sh = payments.p2sh({ redeem: { output: redeemScript } });
-    if (input.prevOutScript) {
-      let p2shAlt;
+    // A CP2SH prevOutScript wraps the same redeem script, but the scriptPubKey
+    // carries the colour identifier, so it must be rebuilt as CP2SH.
+    const prevOut = input.prevOutScript;
+    const knownColored = outputTypeOf(prevOut) === SCRIPT_TYPES.CP2SH;
+    // The colour only exists in the output being spent. When that output is
+    // unknown, the caller saying cp2sh is the only thing that identifies it.
+    const colored =
+      knownColored || (prevOut === undefined && prevOutScriptType === 'cp2sh');
+    let alt;
+    if (prevOut) {
       try {
-        p2shAlt = payments.p2sh({ output: input.prevOutScript });
+        alt = knownColored
+          ? payments.cp2sh({ output: prevOut })
+          : payments.p2sh({ output: prevOut });
       } catch (e) {
         throw new Error('PrevOutScript must be P2SH');
       }
-      if (!p2sh.hash.equals(p2shAlt.hash))
-        throw new Error('Redeem script inconsistent with prevOutScript');
     }
-    const expanded = expandOutput(p2sh.redeem.output, ourPubKey);
+    const payment = knownColored
+      ? payments.cp2sh({
+          redeem: { output: redeemScript },
+          colorId: alt.colorId,
+        })
+      : payments.p2sh({ redeem: { output: redeemScript } });
+    if (alt && !payment.hash.equals(alt.hash))
+      throw new Error('Redeem script inconsistent with prevOutScript');
+    const expanded = expandOutput(payment.redeem.output, ourPubKey);
     if (!expanded.pubkeys)
       throw new Error(
         expanded.type +
@@ -461,8 +497,10 @@ function prepareInput(input, ourPubKey, redeemScript) {
     return {
       redeemScript,
       redeemScriptType: expanded.type,
-      prevOutType: SCRIPT_TYPES.P2SH,
-      prevOutScript: p2sh.output,
+      prevOutType: colored ? SCRIPT_TYPES.CP2SH : SCRIPT_TYPES.P2SH,
+      // without the colour the CP2SH scriptPubKey can not be rebuilt, and a
+      // P2SH one would be a lie
+      prevOutScript: colored && !knownColored ? undefined : payment.output,
       signScript,
       signType: expanded.type,
       pubkeys: expanded.pubkeys,
@@ -472,7 +510,10 @@ function prepareInput(input, ourPubKey, redeemScript) {
   }
   if (input.prevOutType && input.prevOutScript) {
     // embedded scripts are not possible without extra information
-    if (input.prevOutType === SCRIPT_TYPES.P2SH)
+    if (
+      input.prevOutType === SCRIPT_TYPES.P2SH ||
+      input.prevOutType === SCRIPT_TYPES.CP2SH
+    )
       throw new Error(
         'PrevOutScript is ' + input.prevOutType + ', requires redeemScript',
       );
@@ -602,8 +643,23 @@ function checkSignArgs(inputs, signParams) {
     signParams.hashType,
     `sign hashType parameter must be a number`,
   );
-  const prevOutType = (inputs[signParams.vin] || []).prevOutType;
+  const input = inputs[signParams.vin] || {};
+  const prevOutType = input.prevOutType;
   const posType = signParams.prevOutScriptType;
+  if (
+    (posType === 'cp2pkh' || posType === 'cp2sh') &&
+    input.prevOutScriptInferred
+  ) {
+    // A coloured scriptPubKey can not be recovered from a scriptSig: the
+    // colour identifier only appears in the output being spent. Signing
+    // against the guessed script would commit to the wrong script code.
+    throw new TypeError(
+      `input #${signParams.vin} was restored from a transaction, so its ` +
+        `previous output script is a guess. Rebuild the transaction with ` +
+        `addInput(txid, vout, sequence, prevOutScript) to sign a coloured ` +
+        `input.`,
+    );
+  }
   switch (posType) {
     case 'p2pkh':
       if (prevOutType && prevOutType !== 'pubkeyhash') {
@@ -668,9 +724,9 @@ function checkSignArgs(inputs, signParams) {
       );
       break;
     case 'cp2sh':
-      if (prevOutType && prevOutType !== 'coloredpubkeyhash') {
+      if (prevOutType && prevOutType !== 'coloredscripthash') {
         throw new TypeError(
-          `input #${signParams.vin} is not of type cp2pkh: ${prevOutType}`,
+          `input #${signParams.vin} is not of type cp2sh: ${prevOutType}`,
         );
       }
       tfMessage(
@@ -747,7 +803,12 @@ function getSigningData(
   const ourPubKey =
     keyPair.publicKey || (keyPair.getPublicKey && keyPair.getPublicKey());
   if (!canSign(input)) {
-    const prepared = prepareInput(input, ourPubKey, redeemScript);
+    const prepared = prepareInput(
+      input,
+      ourPubKey,
+      redeemScript,
+      typeof signParams === 'object' ? signParams.prevOutScriptType : undefined,
+    );
     // updates inline
     Object.assign(input, prepared);
     if (!canSign(input)) throw Error(input.prevOutType + ' not supported');
