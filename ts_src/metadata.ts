@@ -239,7 +239,10 @@ export class Metadata {
 
     // animation_url
     if (fields.animation_url !== undefined) {
-      if (!isHttpsUrl(fields.animation_url) && !isDataUri(fields.animation_url)) {
+      if (
+        !isHttpsUrl(fields.animation_url) &&
+        !isDataUri(fields.animation_url)
+      ) {
         throw new Error('animation_url must be an HTTPS URL or Data URI');
       }
       if (
