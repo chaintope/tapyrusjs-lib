@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import { describe, it } from 'mocha';
 import { crypto as bcrypto, ECPair, schnorr } from '..';
+const ecc = require('tiny-secp256k1');
 
 // Known-answer vectors from tapyrus-core's own C++ unit test,
 // src/test/key_tests.cpp (`schnorr_signature` / deterministic signing), which
@@ -181,9 +182,38 @@ describe('schnorr', () => {
       );
     });
 
+    it('rejects a hybrid public key', () => {
+      // 0x06 / 0x07 encode a point that is on the curve, and libsecp256k1
+      // parses them, but tapyrus-core fails such a key with
+      // SCRIPT_ERR_PUBKEYTYPE whatever the script flags are
+      const uncompressed = Buffer.from(
+        ecc.pointFromScalar(KAT.privateKey, false),
+      );
+      // the hybrid prefix states the parity of y, so only one of the two
+      // parses; libsecp256k1 accepts it, and this must not
+      const hybrid = Buffer.from(uncompressed);
+      hybrid[0] = uncompressed[64] & 1 ? 0x07 : 0x06;
+
+      assert.strictEqual(ecc.isPoint(hybrid), true, 'should be a point');
+      assert.strictEqual(schnorr.verify(hybrid, KAT.hash, signature), false);
+      // the uncompressed form of the same key is still accepted
+      assert.strictEqual(
+        schnorr.verify(uncompressed, KAT.hash, signature),
+        true,
+      );
+    });
+
+    it('rejects a public key that is valid but not the signer', () => {
+      // x = 0x0202... is a point on the curve, so this is a well formed key
+      // that simply did not produce the signature
+      assert.strictEqual(
+        schnorr.verify(Buffer.alloc(33, 0x02), KAT.hash, signature),
+        false,
+      );
+    });
+
     it('rejects a malformed public key', () => {
       const cases = [
-        Buffer.alloc(33, 0x02), // x = 0x0202..., not on the curve
         Buffer.concat([Buffer.from([0x02]), Buffer.alloc(32, 0xff)]), // x >= p
         Buffer.concat([
           Buffer.from([0x02]),
