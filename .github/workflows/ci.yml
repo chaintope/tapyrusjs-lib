@@ -18,14 +18,11 @@ jobs:
           registry-url: https://registry.npmjs.org/
           cache: 'npm'
       - run: npm ci
-      - name: Check format
-        run: npm run format:ci
-      - name: Check lint
-        run: npm run lint
+      # build, format:ci, lint and the unit tests with the coverage threshold
+      - name: Run npm test
+        run: npm test
       - name: Check lint (tests)
         run: npm run lint:tests
-      - name: Run unit test
-        run: npm run unit
       # npm run unit builds first, so src/ and types/ are up to date here
       - name: Check the built output is committed
         run: git diff --exit-code src types
