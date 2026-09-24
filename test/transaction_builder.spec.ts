@@ -759,7 +759,9 @@ for (const useOldSignArgs of [false, true]) {
         network,
       });
 
-      function prevTxWith(outs: Array<{ script: Buffer; value: number }>) {
+      function prevTxWith(
+        outs: Array<{ script: Buffer; value: number }>,
+      ): Transaction {
         const tx = new Transaction();
         tx.addInput(Buffer.alloc(32, 0x09), 0);
         outs.forEach(o => tx.addOutput(o.script, o.value));
@@ -771,12 +773,13 @@ for (const useOldSignArgs of [false, true]) {
       function edgeSign(
         txb: TransactionBuilder,
         vin: number,
-        keyPair: ECPairInterface,
+        signer: ECPairInterface,
         prevOutScriptType: string,
         redeemScript?: Buffer,
       ): void {
-        if (useOldSignArgs) txb.sign(vin, keyPair, redeemScript);
-        else txb.sign({ prevOutScriptType, vin, keyPair, redeemScript });
+        if (useOldSignArgs) txb.sign(vin, signer, redeemScript);
+        else
+          txb.sign({ prevOutScriptType, vin, keyPair: signer, redeemScript });
       }
 
       it('signs a cp2sh input when the prevOutScript is known', () => {
