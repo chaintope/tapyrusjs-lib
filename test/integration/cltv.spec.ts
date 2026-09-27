@@ -255,7 +255,7 @@ describe('tapyrusjs-lib (transactions w/ CLTV)', () => {
       await regtestUtils.broadcast(tx.toHex()).catch(err => {
         assert.throws(() => {
           if (err) throw err;
-        }, /Error: non-final \(code 64\)/);
+        }, /Error: sendrawtransaction failed: non-final \(code 64\)/);
       });
     },
   );

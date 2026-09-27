@@ -137,7 +137,6 @@ describe('tapyrusjs-lib (transactions w/ CSV)', () => {
       // it is signed with Pstt but finalized by hand, the same way the other
       // tests below build a Transaction and its scriptSig directly.
       const pstt = new bitcoin.Pstt({ network: regtest })
-        .setFeatures(2)
         .addInput({
           previousTxid: unspent.txId,
           outputIndex: unspent.vout,
@@ -202,7 +201,7 @@ describe('tapyrusjs-lib (transactions w/ CSV)', () => {
       const unspent = await regtestUtils.faucet(p2sh.address!, 2e4);
 
       const tx = new bitcoin.Transaction();
-      tx.version = 2;
+      tx.version = 1; // Tapyrus calls this nFeatures and only accepts 1.
       tx.addInput(idToHash(unspent.txId), unspent.vout, sequence);
       tx.addOutput(toOutputScript(regtestUtils.RANDOM_ADDRESS), 1e4);
 
@@ -232,7 +231,7 @@ describe('tapyrusjs-lib (transactions w/ CSV)', () => {
       await regtestUtils.broadcast(tx.toHex()).catch(err => {
         assert.throws(() => {
           if (err) throw err;
-        }, /Error: non-BIP68-final \(code 64\)/);
+        }, /Error: sendrawtransaction failed: non-BIP68-final \(code 64\)/);
       });
     },
   );
@@ -264,7 +263,7 @@ describe('tapyrusjs-lib (transactions w/ CSV)', () => {
       const unspent = await regtestUtils.faucet(p2sh.address!, 1e5);
 
       const tx = new bitcoin.Transaction();
-      tx.version = 2;
+      tx.version = 1; // Tapyrus calls this nFeatures and only accepts 1.
       tx.addInput(idToHash(unspent.txId), unspent.vout);
       tx.addOutput(toOutputScript(regtestUtils.RANDOM_ADDRESS), 7e4);
 
@@ -332,7 +331,7 @@ describe('tapyrusjs-lib (transactions w/ CSV)', () => {
       const unspent = await regtestUtils.faucet(p2sh.address!, 1e5);
 
       const tx = new bitcoin.Transaction();
-      tx.version = 2;
+      tx.version = 1; // Tapyrus calls this nFeatures and only accepts 1.
       tx.addInput(idToHash(unspent.txId), unspent.vout, sequence1); // Set sequence1 for input
       tx.addOutput(toOutputScript(regtestUtils.RANDOM_ADDRESS), 7e4);
 
@@ -403,7 +402,7 @@ describe('tapyrusjs-lib (transactions w/ CSV)', () => {
       const unspent = await regtestUtils.faucet(p2sh.address!, 1e5);
 
       const tx = new bitcoin.Transaction();
-      tx.version = 2;
+      tx.version = 1; // Tapyrus calls this nFeatures and only accepts 1.
       tx.addInput(idToHash(unspent.txId), unspent.vout, sequence2); // Set sequence2 for input
       tx.addOutput(toOutputScript(regtestUtils.RANDOM_ADDRESS), 7e4);
 

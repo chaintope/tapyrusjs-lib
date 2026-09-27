@@ -257,7 +257,9 @@ describe('tapyrusjs-lib (transactions with pstt)', () => {
 
     // PSTT_IN_BIP32_DERIVATION records which xpub and path a signature was
     // derived from. Pstt has no signInputHD helper, so the already-derived
-    // child key signs directly; it satisfies the Signer interface itself.
+    // child key signs directly. It is re-wrapped as an ECPair first: the
+    // bip32 node's own `sign` returns a Uint8Array rather than a Buffer, which
+    // typeforce's Buffer check (used to encode the signature) rejects.
     const bip32Derivation = [{ masterFingerprint, path, pubkey }];
     const p2pkh = createPayment('p2pkh', [childNode as any]);
     const inputData = await getInputData(5e4, p2pkh.payment, 'noredeem');
@@ -273,7 +275,11 @@ describe('tapyrusjs-lib (transactions with pstt)', () => {
         amount: 2e4,
       })
       .finishConstruction();
-    pstt.signInput(0, childNode as any);
+    const childKeyPair = bitcoin.ECPair.fromPrivateKey(
+      Buffer.from(childNode.privateKey!),
+      { network: regtest },
+    );
+    pstt.signInput(0, childKeyPair);
 
     assert.strictEqual(pstt.validateSignaturesOfInput(0), true);
     assert.strictEqual(pstt.validateSignaturesOfInput(0, pubkey), true);
