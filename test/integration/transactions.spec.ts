@@ -77,10 +77,7 @@ describe('tapyrusjs-lib (transactions with pstt)', () => {
         outputIndex, // the output index of the txo you are spending
         utxo, // the full previous transaction as a Buffer
       } = inputData1;
-      assert.deepStrictEqual(
-        { previousTxid, outputIndex, utxo },
-        inputData1,
-      );
+      assert.deepStrictEqual({ previousTxid, outputIndex, utxo }, inputData1);
     }
 
     // network is only needed if you pass an address to addOutput
