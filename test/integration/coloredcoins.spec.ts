@@ -1,5 +1,4 @@
 import * as assert from 'assert';
-import { PsbtInput } from 'bip174/src/lib/interfaces';
 import { describe, it } from 'mocha';
 import * as tapyrus from '../..';
 import { regtestUtils, Unspent } from './_regtest';
@@ -40,43 +39,23 @@ async function issue(
   issuer: Issuer,
   colored: { address: string; value: number },
 ): Promise<string> {
-  const psbt = new tapyrus.Psbt({ network: NETWORK })
+  const pstt = new tapyrus.Pstt({ network: NETWORK })
     .addInput({
-      hash: issuer.unspent.txId,
-      index: issuer.unspent.vout,
-      nonWitnessUtxo: Buffer.from(issuer.prevTxHex, 'hex'),
+      previousTxid: issuer.unspent.txId,
+      outputIndex: issuer.unspent.vout,
+      utxo: Buffer.from(issuer.prevTxHex, 'hex'),
     })
-    .addOutput(colored)
-    .addOutput({ address: issuer.payment.address!, value: FUNDING - FEE })
-    .signInput(0, issuer.key);
+    .addOutput({ address: colored.address, amount: colored.value })
+    .addOutput({ address: issuer.payment.address!, amount: FUNDING - FEE })
+    .finishConstruction();
+  pstt.signInput(0, issuer.key);
 
-  assert.strictEqual(psbt.validateSignaturesOfInput(0), true);
-  const tx = psbt.finalizeAllInputs().extractTransaction();
+  assert.strictEqual(pstt.validateSignaturesOfInput(0), true);
+  const tx = pstt.finalizeAllInputs().extractTransaction();
 
   await regtestUtils.broadcast(tx.toHex());
   await regtestUtils.mine(1);
   return tx.getId();
-}
-
-/**
- * The scriptSig that spends a CP2PKH output. Psbt classifies only P2PK, P2PKH
- * and P2MS, so a coloured input has to be finalized by the caller.
- */
-function finalizeCp2pkh(
-  colorId: Buffer,
-  key: tapyrus.ECPairInterface,
-): (index: number, input: PsbtInput) => { finalScriptSig: Buffer | undefined } {
-  return (
-    _index: number,
-    input: PsbtInput,
-  ): { finalScriptSig: Buffer | undefined } => ({
-    finalScriptSig: tapyrus.payments.cp2pkh({
-      colorId,
-      pubkey: key.publicKey,
-      signature: input.partialSig![0].signature,
-      network: NETWORK,
-    }).input,
-  });
 }
 
 describe('tapyrusjs-lib (colored coins)', () => {
@@ -188,29 +167,29 @@ describe('tapyrusjs-lib (colored coins)', () => {
       network: NETWORK,
     }).address!;
 
-    const psbt = new tapyrus.Psbt({ network: NETWORK })
+    const pstt = new tapyrus.Pstt({ network: NETWORK })
       .addInput({
-        hash: issuanceId,
-        index: 0,
-        nonWitnessUtxo: Buffer.from(issuance.txHex, 'hex'),
+        previousTxid: issuanceId,
+        outputIndex: 0,
+        utxo: Buffer.from(issuance.txHex, 'hex'),
       })
       .addInput({
-        hash: issuanceId,
-        index: 1,
-        nonWitnessUtxo: Buffer.from(issuance.txHex, 'hex'),
+        previousTxid: issuanceId,
+        outputIndex: 1,
+        utxo: Buffer.from(issuance.txHex, 'hex'),
       })
-      .addOutput({ address: recipientAddress, value: 1e6 })
+      .addOutput({ address: recipientAddress, amount: 1e6 })
       .addOutput({
         address: issuer.payment.address!,
-        value: FUNDING - 2 * FEE,
+        amount: FUNDING - 2 * FEE,
       })
-      .signInput(0, issuer.key)
-      .signInput(1, issuer.key);
+      .finishConstruction();
+    pstt.signInput(0, issuer.key);
+    pstt.signInput(1, issuer.key);
 
-    // Psbt does not finalize a coloured script on its own
-    psbt.finalizeInput(0, finalizeCp2pkh(colorId, issuer.key));
-    psbt.finalizeInput(1);
-    const tx = psbt.extractTransaction();
+    // Pstt's Input Finalizer already knows CP2PKH: it satisfies it with the
+    // same {signature} {pubkey} stack as P2PKH.
+    const tx = pstt.finalizeAllInputs().extractTransaction();
 
     await regtestUtils.broadcast(tx.toHex());
     await regtestUtils.mine(1);
@@ -237,27 +216,26 @@ describe('tapyrusjs-lib (colored coins)', () => {
 
     // spending the colour without producing an output of that colour destroys
     // it; the TPC input still has to cover the fee
-    const psbt = new tapyrus.Psbt({ network: NETWORK })
+    const pstt = new tapyrus.Pstt({ network: NETWORK })
       .addInput({
-        hash: issuanceId,
-        index: 0,
-        nonWitnessUtxo: Buffer.from(issuance.txHex, 'hex'),
+        previousTxid: issuanceId,
+        outputIndex: 0,
+        utxo: Buffer.from(issuance.txHex, 'hex'),
       })
       .addInput({
-        hash: issuanceId,
-        index: 1,
-        nonWitnessUtxo: Buffer.from(issuance.txHex, 'hex'),
+        previousTxid: issuanceId,
+        outputIndex: 1,
+        utxo: Buffer.from(issuance.txHex, 'hex'),
       })
       .addOutput({
         address: issuer.payment.address!,
-        value: FUNDING - 2 * FEE,
+        amount: FUNDING - 2 * FEE,
       })
-      .signInput(0, issuer.key)
-      .signInput(1, issuer.key);
+      .finishConstruction();
+    pstt.signInput(0, issuer.key);
+    pstt.signInput(1, issuer.key);
 
-    psbt.finalizeInput(0, finalizeCp2pkh(colorId, issuer.key));
-    psbt.finalizeInput(1);
-    const tx = psbt.extractTransaction();
+    const tx = pstt.finalizeAllInputs().extractTransaction();
 
     await regtestUtils.broadcast(tx.toHex());
     await regtestUtils.mine(1);

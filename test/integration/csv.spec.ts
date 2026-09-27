@@ -1,5 +1,4 @@
 import * as assert from 'assert';
-import { PsbtInput } from 'bip174/src/lib/interfaces';
 import { before, describe, it } from 'mocha';
 import * as bitcoin from '../..';
 import { regtestUtils } from './_regtest';
@@ -132,26 +131,41 @@ describe('tapyrusjs-lib (transactions w/ CSV)', () => {
       const unspent = await regtestUtils.faucet(p2sh.address!, 1e5);
       const utx = await regtestUtils.fetch(unspent.txId);
       // for non segwit inputs, you must pass the full transaction buffer
-      const nonWitnessUtxo = Buffer.from(utx.txHex, 'hex');
+      const utxo = Buffer.from(utx.txHex, 'hex');
 
-      // This is an example of using the finalizeInput second parameter to
-      // define how you finalize the inputs, allowing for any type of script.
-      const tx = new bitcoin.Psbt({ network: regtest })
-        .setVersion(2)
+      // The CSV script has no template Pstt's Input Finalizer recognises, so
+      // it is signed with Pstt but finalized by hand, the same way the other
+      // tests below build a Transaction and its scriptSig directly.
+      const pstt = new bitcoin.Pstt({ network: regtest })
+        .setFeatures(2)
         .addInput({
-          hash: unspent.txId,
-          index: unspent.vout,
+          previousTxid: unspent.txId,
+          outputIndex: unspent.vout,
           sequence,
           redeemScript: p2sh.redeem!.output!,
-          nonWitnessUtxo,
+          utxo,
         })
         .addOutput({
           address: regtestUtils.RANDOM_ADDRESS,
-          value: 7e4,
+          amount: 7e4,
         })
-        .signInput(0, alice)
-        .finalizeInput(0, csvGetFinalScripts) // See csvGetFinalScripts below
-        .extractTransaction();
+        .finishConstruction();
+      pstt.signInput(0, alice);
+
+      // {Alice's signature} OP_TRUE
+      const tx = pstt.getTransaction();
+      const redeemScriptSig = bitcoin.payments.p2sh({
+        network: regtest,
+        redeem: {
+          network: regtest,
+          output: p2sh.redeem!.output,
+          input: bitcoin.script.compile([
+            pstt.inputs[0].partialSig[0].signature,
+            bitcoin.opcodes.OP_TRUE,
+          ]),
+        },
+      }).input;
+      tx.setInputScript(0, redeemScriptSig!);
 
       // TODO: test that it failures _prior_ to expiry, unfortunately, race conditions when run concurrently
       // ...
@@ -430,46 +444,3 @@ describe('tapyrusjs-lib (transactions w/ CSV)', () => {
     },
   );
 });
-
-// This function is used to finalize a CSV transaction using PSBT.
-// See first test above.
-function csvGetFinalScripts(
-  inputIndex: number,
-  input: PsbtInput,
-  script: Buffer,
-  isP2SH: boolean,
-): {
-  finalScriptSig: Buffer | undefined;
-} {
-  // Step 1: Check to make sure the meaningful script matches what you expect.
-  const decompiled = bitcoin.script.decompile(script);
-  // Checking if first OP is OP_IF... should do better check in production!
-  // You may even want to check the public keys in the script against a
-  // whitelist depending on the circumstances!!!
-  // You also want to check the contents of the input to see if you have enough
-  // info to actually construct the scriptSig and Witnesses.
-  if (!decompiled || decompiled[0] !== bitcoin.opcodes.OP_IF) {
-    throw new Error(`Can not finalize input #${inputIndex}`);
-  }
-
-  // Step 2: Create final scripts
-  let payment: bitcoin.Payment = {
-    network: regtest,
-    output: script,
-    // This logic should be more strict and make sure the pubkeys in the
-    // meaningful script are the ones signing in the PSBT etc.
-    input: bitcoin.script.compile([
-      input.partialSig![0].signature,
-      bitcoin.opcodes.OP_TRUE,
-    ]),
-  };
-  if (isP2SH)
-    payment = bitcoin.payments.p2sh({
-      network: regtest,
-      redeem: payment,
-    });
-
-  return {
-    finalScriptSig: payment.input,
-  };
-}

@@ -15,28 +15,29 @@ async function buildAndSign(
   const unspent = await regtestUtils.faucetComplex(prevOutput, 5e4);
   const utx = await regtestUtils.fetch(unspent.txId);
 
-  const psbt = new bitcoin.Psbt({ network: NETWORK })
+  const pstt = new bitcoin.Pstt({ network: NETWORK })
     .addInput({
-      hash: unspent.txId,
-      index: unspent.vout,
-      nonWitnessUtxo: Buffer.from(utx.txHex, 'hex'),
+      previousTxid: unspent.txId,
+      outputIndex: unspent.vout,
+      utxo: Buffer.from(utx.txHex, 'hex'),
       ...(redeemScript ? { redeemScript } : {}),
     })
     .addOutput({
       address: regtestUtils.RANDOM_ADDRESS,
-      value: 2e4,
-    });
+      amount: 2e4,
+    })
+    .finishConstruction();
 
   if (depends.signatures) {
     keyPairs.forEach(keyPair => {
-      psbt.signInput(0, keyPair);
+      pstt.signInput(0, keyPair);
     });
   } else if (depends.signature) {
-    psbt.signInput(0, keyPairs[0]);
+    pstt.signInput(0, keyPairs[0]);
   }
 
   return regtestUtils.broadcast(
-    psbt
+    pstt
       .finalizeAllInputs()
       .extractTransaction()
       .toHex(),
