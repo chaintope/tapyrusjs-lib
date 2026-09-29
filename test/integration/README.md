@@ -14,7 +14,7 @@ docker compose -f docker-compose.integration.yml down
 ```
 
 The node listens on `127.0.0.1:12382`. If nothing is listening there, every
-test fails with a message saying so rather than hanging.
+test that needs the node fails with a message saying so rather than hanging.
 
 ## Settings
 
