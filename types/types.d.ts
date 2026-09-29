@@ -4,15 +4,17 @@ export declare namespace BIP32Path {
     var toJSON: () => string;
 }
 export declare function Signer(obj: any): boolean;
-/**
- * A Tapyrus colour identifier: one token type byte followed by a 32 byte
- * payload. tapyrus-core rejects any other type byte, and rejects an all-zero
- * payload, both when decoding an address and when executing OP_COLOR.
- */
 export declare const COLOR_ID_REISSUABLE = 193;
 export declare const COLOR_ID_NON_REISSUABLE = 194;
 export declare const COLOR_ID_NFT = 195;
-export declare function ColorId(value: unknown): boolean;
+export declare const COLOR_ID_LENGTH = 33;
+/**
+ * A Tapyrus colour identifier: one token type byte followed by a 32 byte
+ * payload. tapyrus-core rejects any other type byte both when decoding an
+ * address and when executing OP_COLOR. It rejects an all-zero payload only when
+ * executing OP_COLOR (SCRIPT_ERR_OP_COLORID_INVALID); this check applies both.
+ */
+export declare function ColorId(value: any): boolean;
 export declare namespace ColorId {
     var toJSON: () => string;
 }

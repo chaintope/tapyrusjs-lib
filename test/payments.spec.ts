@@ -47,6 +47,47 @@ import * as u from './payments.utils';
       );
     });
 
+    if (p === 'cp2pkh' || p === 'cp2sh') {
+      const hash = Buffer.from('11'.repeat(20), 'hex');
+      const network = require('../src/networks').prod;
+      const version =
+        p === 'cp2pkh' ? network.coloredPubKeyHash : network.coloredScriptHash;
+      const bad = Buffer.from('c4' + '22'.repeat(32), 'hex');
+      const address = require('bs58check').encode(
+        Buffer.concat([Buffer.from([version]), bad, hash]),
+      );
+      const output = Buffer.concat([
+        Buffer.from([0x21]),
+        bad,
+        Buffer.from([0xbc]), // OP_COLOR
+        p === 'cp2pkh'
+          ? Buffer.concat([
+              Buffer.from('76a914', 'hex'),
+              hash,
+              Buffer.from('88ac', 'hex'),
+            ])
+          : Buffer.concat([
+              Buffer.from('a914', 'hex'),
+              hash,
+              Buffer.from('87', 'hex'),
+            ]),
+      ]);
+
+      [{ address }, { output }].forEach(args => {
+        it(
+          'refuses an invalid color from ' +
+            Object.keys(args)[0] +
+            ' without validation',
+          () => {
+            assert.throws(() => {
+              const built: any = fn(args as any, { validate: false });
+              built.colorId;
+            }, /color identifier/);
+          },
+        );
+      });
+    }
+
     // cross-verify dynamically too
     if (!fixtures.dynamic) return;
     const { depends, details } = fixtures.dynamic;

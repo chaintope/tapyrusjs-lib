@@ -1,3 +1,4 @@
+import * as baddress from '../address';
 import * as bcrypto from '../crypto';
 import { prod as PROD_NETWORK } from '../networks';
 import * as bscript from '../script';
@@ -15,8 +16,6 @@ import {
 } from './util';
 const typef = require('typeforce');
 const OPS = bscript.OPS;
-
-const bs58check = require('bs58check');
 
 // input: [redeemScriptSig ...] {redeemScript}
 // output: {colorId} OP_COLOR OP_HASH160 {hash160(redeemScript)} OP_EQUAL
@@ -58,11 +57,11 @@ export function cp2sh(a: Payment, opts?: PaymentOpts): Payment {
     if (!o.hash) return;
     if (!o.colorId) return;
 
-    const payload = Buffer.allocUnsafe(54);
-    payload.writeUInt8(o.network!.coloredScriptHash, 0);
-    o.colorId.copy(payload, 1);
-    o.hash.copy(payload, 34);
-    return bs58check.encode(payload);
+    return baddress.toBase58Check(
+      o.hash,
+      o.network!.coloredScriptHash,
+      o.colorId,
+    );
   });
   lazy.prop(o, 'hash', () => {
     // in order of least effort
@@ -103,8 +102,14 @@ export function cp2sh(a: Payment, opts?: PaymentOpts): Payment {
     return nameParts.join('-');
   });
   lazy.prop(o, 'colorId', () => {
-    if (a.output) return a.output.slice(1, 34);
-    if (a.address) return _address().colorId;
+    let colorId: Buffer | undefined;
+    if (a.output) colorId = a.output.slice(1, 1 + types.COLOR_ID_LENGTH);
+    else if (a.address) colorId = _address().colorId;
+    // also covers opts.validate === false, so an unspendable colour never
+    // reaches an output script or address
+    if (colorId && !types.ColorId(colorId))
+      throw new TypeError('Invalid color identifier');
+    return colorId;
   });
 
   if (opts.validate) {
@@ -114,7 +119,7 @@ export function cp2sh(a: Payment, opts?: PaymentOpts): Payment {
       if (_address().version !== network.coloredScriptHash)
         throw new TypeError('Invalid version or Network mismatch');
       if (_address().hash.length !== 20) throw new TypeError('Invalid address');
-      if (_address().colorId.length !== 33)
+      if (_address().colorId.length !== types.COLOR_ID_LENGTH)
         throw new TypeError('Invalid address');
       hash = _address().hash;
       colorId = _address().colorId;
@@ -140,7 +145,7 @@ export function cp2sh(a: Payment, opts?: PaymentOpts): Payment {
       )
         throw new TypeError('Output is invalid');
 
-      const colorId2 = a.output.slice(1, 34);
+      const colorId2 = a.output.slice(1, 1 + types.COLOR_ID_LENGTH);
       colorId = validColorId(colorId, colorId2);
 
       const hash2 = a.output.slice(37, 57);

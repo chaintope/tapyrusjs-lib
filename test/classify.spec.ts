@@ -49,6 +49,34 @@ describe('classify', () => {
     });
   });
 
+  describe('colored output templates', () => {
+    const hash = '11'.repeat(20);
+    const scripts: { [name: string]: (colorId: string) => Buffer } = {
+      coloredPubKeyHash: (c: string): Buffer =>
+        Buffer.from('21' + c + 'bc76a914' + hash + '88ac', 'hex'),
+      coloredScriptHash: (c: string): Buffer =>
+        Buffer.from('21' + c + 'bca914' + hash + '87', 'hex'),
+    };
+
+    Object.keys(scripts).forEach(name => {
+      const output = (tmap as any)[name].output;
+      it(name + ' accepts a valid color identifier', () => {
+        assert.strictEqual(
+          output.check(scripts[name]('c3' + '22'.repeat(32))),
+          true,
+        );
+      });
+      ['c4', '00'].forEach(typeByte => {
+        it(name + ' rejects the type byte 0x' + typeByte, () => {
+          assert.strictEqual(
+            output.check(scripts[name](typeByte + '22'.repeat(32))),
+            false,
+          );
+        });
+      });
+    });
+  });
+
   describe('classifyOutput', () => {
     fixtures.valid.forEach(f => {
       if (!f.output) return;
