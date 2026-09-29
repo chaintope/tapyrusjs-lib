@@ -1,6 +1,7 @@
 'use strict';
 Object.defineProperty(exports, '__esModule', { value: true });
 exports.cp2sh = cp2sh;
+const baddress = require('../address');
 const bcrypto = require('../crypto');
 const networks_1 = require('../networks');
 const bscript = require('../script');
@@ -9,7 +10,6 @@ const lazy = require('./lazy');
 const util_1 = require('./util');
 const typef = require('typeforce');
 const OPS = bscript.OPS;
-const bs58check = require('bs58check');
 // input: [redeemScriptSig ...] {redeemScript}
 // output: {colorId} OP_COLOR OP_HASH160 {hash160(redeemScript)} OP_EQUAL
 function cp2sh(a, opts) {
@@ -42,11 +42,11 @@ function cp2sh(a, opts) {
   lazy.prop(o, 'address', () => {
     if (!o.hash) return;
     if (!o.colorId) return;
-    const payload = Buffer.allocUnsafe(54);
-    payload.writeUInt8(o.network.coloredScriptHash, 0);
-    o.colorId.copy(payload, 1);
-    o.hash.copy(payload, 34);
-    return bs58check.encode(payload);
+    return baddress.toBase58Check(
+      o.hash,
+      o.network.coloredScriptHash,
+      o.colorId,
+    );
   });
   lazy.prop(o, 'hash', () => {
     // in order of least effort
@@ -83,8 +83,14 @@ function cp2sh(a, opts) {
     return nameParts.join('-');
   });
   lazy.prop(o, 'colorId', () => {
-    if (a.output) return a.output.slice(1, 34);
-    if (a.address) return _address().colorId;
+    let colorId;
+    if (a.output) colorId = a.output.slice(1, 1 + types.COLOR_ID_LENGTH);
+    else if (a.address) colorId = _address().colorId;
+    // also covers opts.validate === false, so an unspendable colour never
+    // reaches an output script or address
+    if (colorId && !types.ColorId(colorId))
+      throw new TypeError('Invalid color identifier');
+    return colorId;
   });
   if (opts.validate) {
     let hash = Buffer.from([]);
@@ -93,7 +99,7 @@ function cp2sh(a, opts) {
       if (_address().version !== network.coloredScriptHash)
         throw new TypeError('Invalid version or Network mismatch');
       if (_address().hash.length !== 20) throw new TypeError('Invalid address');
-      if (_address().colorId.length !== 33)
+      if (_address().colorId.length !== types.COLOR_ID_LENGTH)
         throw new TypeError('Invalid address');
       hash = _address().hash;
       colorId = _address().colorId;
@@ -115,7 +121,7 @@ function cp2sh(a, opts) {
         a.output[57] !== OPS.OP_EQUAL
       )
         throw new TypeError('Output is invalid');
-      const colorId2 = a.output.slice(1, 34);
+      const colorId2 = a.output.slice(1, 1 + types.COLOR_ID_LENGTH);
       colorId = (0, util_1.validColorId)(colorId, colorId2);
       const hash2 = a.output.slice(37, 57);
       (0, util_1.checkHash)(hash, hash2);

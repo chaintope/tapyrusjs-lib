@@ -14,7 +14,8 @@ export interface Base58CheckResult {
 }
 
 const PUBKEY_HASH_LENGTH = 20;
-const COLOR_ID_LENGTH = 33;
+const COLOR_ID_LENGTH = types.COLOR_ID_LENGTH;
+const INVALID_COLOR_ID = 'has an invalid color identifier';
 const UNCOLORED_LENGTH = 1 + PUBKEY_HASH_LENGTH; // 21
 const COLORED_LENGTH = 1 + PUBKEY_HASH_LENGTH + COLOR_ID_LENGTH; // 54
 
@@ -36,7 +37,7 @@ export function fromBase58Check(address: string): Base58CheckResult {
       throw new TypeError(`Invalid hash(${hash.toString('hex')})`);
     }
     if (!types.ColorId(colorId)) {
-      throw new TypeError(`${address} has an invalid color identifier`);
+      throw new TypeError(`${address} ${INVALID_COLOR_ID}`);
     }
     return { version, colorId, hash };
   } else {
@@ -46,6 +47,11 @@ export function fromBase58Check(address: string): Base58CheckResult {
   }
 }
 
+/**
+ * The version byte is not checked against the colour: this function does not
+ * know the network, so it can encode an uncoloured version with a colour and a
+ * coloured version without one. `toOutputScript` rejects both.
+ */
 export function toBase58Check(
   hash: Buffer,
   version: number,
@@ -89,18 +95,28 @@ export function toOutputScript(address: string, network?: Network): Buffer {
   let decodeBase58: Base58CheckResult | undefined;
   try {
     decodeBase58 = fromBase58Check(address);
-  } catch (e) {}
+  } catch (e) {
+    // an undecodable string falls through to 'no matching Script'; a colour
+    // that fails validation is the reason the caller needs to see
+    if (e instanceof Error && e.message.endsWith(INVALID_COLOR_ID)) throw e;
+  }
 
   if (decodeBase58) {
     const { version, hash, colorId } = decodeBase58;
+    const known =
+      version === network.pubKeyHash ||
+      version === network.scriptHash ||
+      version === network.coloredPubKeyHash ||
+      version === network.coloredScriptHash;
     const colored =
       version === network.coloredPubKeyHash ||
       version === network.coloredScriptHash;
 
-    // the version byte and the payload must agree on whether there is a colour
-    if (colored && !colorId)
+    // once the version belongs to this network, it and the payload must agree
+    // on whether there is a colour
+    if (known && colored && !colorId)
       throw new Error(address + ' is missing a color identifier');
-    if (!colored && colorId)
+    if (known && !colored && colorId)
       throw new Error(address + ' has an unexpected color identifier');
 
     if (version === network.pubKeyHash)

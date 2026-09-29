@@ -5,6 +5,7 @@ import * as bscript from '../src/script';
 import * as fixtures from './fixtures/address.json';
 
 const NETWORKS = require('../src/networks');
+const bs58check = require('bs58check');
 
 describe('address', () => {
   describe('fromBase58Check', () => {
@@ -96,6 +97,46 @@ describe('address', () => {
         decoded.colorId!.toString('hex'),
         colorId.toString('hex'),
       );
+    });
+  });
+
+  describe('toOutputScript color identifier errors', () => {
+    const hash = Buffer.from('1111111111111111111111111111111111111111', 'hex');
+    const valid = Buffer.from(
+      'c32222222222222222222222222222222222222222222222222222222222222222',
+      'hex',
+    );
+    const encode = (version: number, colorId: Buffer): string =>
+      bs58check.encode(Buffer.concat([Buffer.from([version]), colorId, hash]));
+
+    it('reports an invalid type byte instead of "no matching Script"', () => {
+      const bad = Buffer.concat([Buffer.from('c4', 'hex'), valid.slice(1)]);
+
+      assert.throws(() => {
+        baddress.toOutputScript(encode(NETWORKS.prod.coloredPubKeyHash, bad));
+      }, /has an invalid color identifier/);
+    });
+
+    it('reports an all-zero payload', () => {
+      const zero = Buffer.concat([Buffer.from('c1', 'hex'), Buffer.alloc(32)]);
+
+      assert.throws(() => {
+        baddress.toOutputScript(encode(NETWORKS.prod.coloredPubKeyHash, zero));
+      }, /has an invalid color identifier/);
+    });
+
+    it('reports a network mismatch for a colored address of another network', () => {
+      const address = encode(NETWORKS.dev.coloredPubKeyHash, valid);
+
+      assert.throws(() => {
+        baddress.toOutputScript(address, NETWORKS.prod);
+      }, new RegExp(address + ' has no matching Script'));
+    });
+
+    it('rejects a colour on an uncoloured version of this network', () => {
+      assert.throws(() => {
+        baddress.toOutputScript(encode(NETWORKS.prod.pubKeyHash, valid));
+      }, /has an unexpected color identifier/);
     });
   });
 
