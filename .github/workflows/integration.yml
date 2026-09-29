@@ -1,10 +1,10 @@
 name: Run Integration Tests
 
-# Not part of the pull request checks: these need a Tapyrus node, and a node
-# that fails to start would turn the unit test result red for an unrelated
-# reason.
+# A separate workflow from ci.yml, so a node that fails to start shows up as its
+# own check and leaves the unit test result alone.
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches: [master]
 
@@ -21,24 +21,7 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - name: Start a Tapyrus node
-        run: docker compose -f docker-compose.integration.yml up -d
-      - name: Wait for the node to accept RPC
-        run: |
-          # tapyrus-core answers every RPC error with HTTP 500, including the
-          # "Loading block index" it returns while warming up, so a reachable
-          # port is not a ready node. -f turns that 500 into a failure.
-          for i in $(seq 1 60); do
-            if curl -sf --user user:pass \
-                 --data '{"jsonrpc":"1.0","id":"ci","method":"getblockcount","params":[]}' \
-                 http://127.0.0.1:12382 > /dev/null; then
-              echo "node is up after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "the node did not answer within 60s"
-          docker compose -f docker-compose.integration.yml logs
-          exit 1
+        run: docker compose -f docker-compose.integration.yml up -d --wait --wait-timeout 60
       - name: Run integration test
         run: npm run integration
       - name: Show the node log

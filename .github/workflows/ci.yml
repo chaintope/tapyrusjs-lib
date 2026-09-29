@@ -23,6 +23,6 @@ jobs:
         run: npm test
       - name: Check lint (tests)
         run: npm run lint:tests
-      # npm run unit builds first, so src/ and types/ are up to date here
+      # npm test builds first, so src/ and types/ are up to date here
       - name: Check the built output is committed
         run: git diff --exit-code src types
