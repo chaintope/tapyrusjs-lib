@@ -245,56 +245,60 @@ describe('tapyrusjs-lib (transactions with pstt)', () => {
     },
   );
 
-  it('can create (and broadcast to a node) a Transaction, w/ a P2PKH input using HD', async () => {
-    const hdRoot = bip32.fromSeed(rng(64));
-    const masterFingerprint = Buffer.from(hdRoot.fingerprint);
-    const path = "m/44'/0'/0'/0/0";
-    const childNode = hdRoot.derivePath(path);
-    const pubkey = Buffer.from(childNode.publicKey);
+  it(
+    'can create (and broadcast to a node) a Transaction, w/ a P2PKH input ' +
+      'whose key is derived with BIP32',
+    async () => {
+      const hdRoot = bip32.fromSeed(rng(64));
+      const masterFingerprint = Buffer.from(hdRoot.fingerprint);
+      const path = "m/44'/0'/0'/0/0";
+      const childNode = hdRoot.derivePath(path);
+      const pubkey = Buffer.from(childNode.publicKey);
 
-    // PSTT_IN_BIP32_DERIVATION records which xpub and path a signature was
-    // derived from. Pstt has no signInputHD helper, so the already-derived
-    // child key signs directly. It is re-wrapped as an ECPair first: the
-    // bip32 node's own `sign` returns a Uint8Array rather than a Buffer, which
-    // typeforce's Buffer check (used to encode the signature) rejects.
-    const bip32Derivation = [{ masterFingerprint, path, pubkey }];
-    const p2pkh = createPayment('p2pkh', [childNode as any]);
-    const inputData = await getInputData(5e4, p2pkh.payment, 'noredeem');
-    {
-      const { previousTxid, outputIndex, utxo } = inputData;
-      assert.deepStrictEqual({ previousTxid, outputIndex, utxo }, inputData);
-    }
+      // PSTT_IN_BIP32_DERIVATION records which xpub and path a signature was
+      // derived from. Pstt has no signInputHD helper, so the already-derived
+      // child key signs directly. It is re-wrapped as an ECPair first: the
+      // bip32 node's own `sign` returns a Uint8Array rather than a Buffer, which
+      // typeforce's Buffer check (used to encode the signature) rejects.
+      const bip32Derivation = [{ masterFingerprint, path, pubkey }];
+      const p2pkh = createPayment('p2pkh', [childNode as any]);
+      const inputData = await getInputData(5e4, p2pkh.payment, 'noredeem');
+      {
+        const { previousTxid, outputIndex, utxo } = inputData;
+        assert.deepStrictEqual({ previousTxid, outputIndex, utxo }, inputData);
+      }
 
-    const pstt = new bitcoin.Pstt({ network: regtest })
-      .addInput({ ...inputData, bip32Derivation })
-      .addOutput({
+      const pstt = new bitcoin.Pstt({ network: regtest })
+        .addInput({ ...inputData, bip32Derivation })
+        .addOutput({
+          address: regtestUtils.RANDOM_ADDRESS,
+          amount: 2e4,
+        })
+        .finishConstruction();
+      const childKeyPair = bitcoin.ECPair.fromPrivateKey(
+        Buffer.from(childNode.privateKey!),
+        { network: regtest },
+      );
+      pstt.signInput(0, childKeyPair);
+
+      assert.strictEqual(pstt.validateSignaturesOfInput(0), true);
+      assert.strictEqual(pstt.validateSignaturesOfInput(0, pubkey), true);
+      pstt.finalizeAllInputs();
+
+      const tx = pstt.extractTransaction();
+
+      // build and broadcast to the Tapyrus node
+      await regtestUtils.broadcast(tx.toHex());
+      // an outpoint, and the node's own txid, refer to the hashMalFix
+      const txHash = tx.getId();
+      await regtestUtils.verify({
+        txId: txHash,
         address: regtestUtils.RANDOM_ADDRESS,
-        amount: 2e4,
-      })
-      .finishConstruction();
-    const childKeyPair = bitcoin.ECPair.fromPrivateKey(
-      Buffer.from(childNode.privateKey!),
-      { network: regtest },
-    );
-    pstt.signInput(0, childKeyPair);
-
-    assert.strictEqual(pstt.validateSignaturesOfInput(0), true);
-    assert.strictEqual(pstt.validateSignaturesOfInput(0, pubkey), true);
-    pstt.finalizeAllInputs();
-
-    const tx = pstt.extractTransaction();
-
-    // build and broadcast to the Tapyrus node
-    await regtestUtils.broadcast(tx.toHex());
-    // an outpoint, and the node's own txid, refer to the hashMalFix
-    const txHash = tx.getId();
-    await regtestUtils.verify({
-      txId: txHash,
-      address: regtestUtils.RANDOM_ADDRESS,
-      vout: 0,
-      value: 2e4,
-    });
-  });
+        vout: 0,
+        value: 2e4,
+      });
+    },
+  );
 });
 
 function createPayment(_type: string, myKeys?: any[], network?: any): any {

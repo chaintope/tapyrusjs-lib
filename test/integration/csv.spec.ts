@@ -228,11 +228,10 @@ describe('tapyrusjs-lib (transactions w/ CSV)', () => {
       }).input;
       tx.setInputScript(0, redeemScriptSig!);
 
-      await regtestUtils.broadcast(tx.toHex()).catch(err => {
-        assert.throws(() => {
-          if (err) throw err;
-        }, /Error: sendrawtransaction failed: non-BIP68-final \(code 64\)/);
-      });
+      await assert.rejects(
+        regtestUtils.broadcast(tx.toHex()),
+        /sendrawtransaction failed: non-BIP68-final \(code 64\)/,
+      );
     },
   );
 

@@ -21,6 +21,9 @@ const NETWORK = tapyrus.networks.dev;
 // Long enough for generatetoaddress on a slow runner, short enough that a
 // dropped packet fails before mocha's own timeout.
 const RPC_TIMEOUT_MS = 20000;
+// Blocks mined to fund the wallet before giving up. Far more than a wallet
+// that is credited by them needs; only a wallet that is never paid reaches it.
+const MAX_FUNDING_BLOCKS = 500;
 
 /** A spendable output. `value` is satoshi for TPC and a token count otherwise. */
 export interface Unspent {
@@ -119,6 +122,12 @@ class RegtestUtils {
         }),
       });
     } catch (err) {
+      if ((err as Error).name === 'TimeoutError') {
+        throw new Error(
+          `${method} did not answer within ${RPC_TIMEOUT_MS}ms. The node at ` +
+            `${RPC_URL} is reachable but not responding in time.`,
+        );
+      }
       throw new Error(
         `Cannot reach a Tapyrus node at ${RPC_URL}. Start one with ` +
           '`docker compose -f docker-compose.integration.yml up -d` ' +
@@ -239,7 +248,16 @@ class RegtestUtils {
   /** Mines until the node's wallet can pay `value` satoshi plus a fee. */
   private async ensureFunds(value: number): Promise<void> {
     const needed = (value + 1e6) / 1e8;
-    while ((await this.rpc<number>('getbalance')) < needed) {
+    for (let mined = 0; ; mined++) {
+      const balance = await this.rpc<number>('getbalance');
+      if (balance >= needed) return;
+      if (mined >= MAX_FUNDING_BLOCKS) {
+        throw new Error(
+          `The wallet balance is ${balance} after mining ${mined} blocks, ` +
+            `short of the ${needed} needed. Blocks may be paying an address ` +
+            'the node wallet does not hold, or the wallet may be disabled.',
+        );
+      }
       await this.mine(1);
     }
   }

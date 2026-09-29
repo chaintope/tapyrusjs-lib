@@ -245,7 +245,7 @@ describe('tapyrusjs-lib (colored coins)', () => {
     assert.strictEqual(burned.outs[0].token, 'TPC');
   });
 
-  it('can hold a token in a CP2SH output', async () => {
+  it('can hold a token in a CP2SH output, and spend it', async () => {
     const issuer = await fundIssuer();
     const colorId = tapyrus.coloridentifier.reissuable(issuer.payment.output!);
 
@@ -263,9 +263,49 @@ describe('tapyrusjs-lib (colored coins)', () => {
 
     const txId = await issue(issuer, { address: holder.address!, value: 700 });
 
-    const tx = await regtestUtils.fetch(txId);
-    assert.strictEqual(tx.outs[0].token, colorId.toString('hex'));
-    assert.strictEqual(tx.outs[0].value, 700);
-    assert.ok(tx.outs[0].script.equals(holder.output!));
+    const held = await regtestUtils.fetch(txId);
+    assert.strictEqual(held.outs[0].token, colorId.toString('hex'));
+    assert.strictEqual(held.outs[0].value, 700);
+    assert.ok(held.outs[0].script.equals(holder.output!));
+
+    // spend it: the node checks the redeem script against the colour's script
+    // hash, which is the CP2SH signing path
+    const recipient = tapyrus.ECPair.makeRandom({ network: NETWORK });
+    const recipientAddress = tapyrus.payments.cp2pkh({
+      pubkey: recipient.publicKey,
+      colorId,
+      network: NETWORK,
+    }).address!;
+
+    const pstt = new tapyrus.Pstt({ network: NETWORK })
+      .addInput({
+        previousTxid: txId,
+        outputIndex: 0,
+        utxo: Buffer.from(held.txHex, 'hex'),
+        redeemScript: redeem.output!,
+      })
+      .addInput({
+        previousTxid: txId,
+        outputIndex: 1,
+        utxo: Buffer.from(held.txHex, 'hex'),
+      })
+      .addOutput({ address: recipientAddress, amount: 700 })
+      .addOutput({
+        address: issuer.payment.address!,
+        amount: FUNDING - 2 * FEE,
+      })
+      .finishConstruction();
+    pstt.signInput(0, issuer.key);
+    pstt.signInput(1, issuer.key);
+
+    const tx = pstt.finalizeAllInputs().extractTransaction();
+
+    await regtestUtils.broadcast(tx.toHex());
+    await regtestUtils.mine(1);
+
+    const spent = await regtestUtils.fetch(tx.getId());
+    assert.strictEqual(spent.outs[0].token, colorId.toString('hex'));
+    assert.strictEqual(spent.outs[0].value, 700);
+    assert.strictEqual(spent.outs[0].address, recipientAddress);
   });
 });
