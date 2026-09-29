@@ -308,6 +308,28 @@ describe('Metadata', () => {
         assert.strictEqual(colorId[0], 0xc2);
       });
 
+      it('matches the tapyrus-core vector', () => {
+        // src/test/coloridentifier_tests.cpp in tapyrus-core. The txid is not
+        // a palindrome, so this pins the byte order of the outPoint.
+        const metadata = new Metadata({
+          version: '1.0',
+          name: 'Non-Reissuable Token',
+          symbol: 'NREIS',
+          tokenType: 'non_reissuable',
+        });
+        const outPoint = {
+          txid: Buffer.from(
+            '485273f6703f038a234400edadb543eb44b4af5372e8b207990beebc386e7954',
+            'hex',
+          ),
+          index: 0,
+        };
+        assert.strictEqual(
+          metadata.deriveColorId(undefined, outPoint).toString('hex'),
+          'c29608951ee23595caa227e7668e39f9d3525a39e9dc30d7391f138576c07be84d',
+        );
+      });
+
       it('throws without outPoint', () => {
         const metadata = new Metadata({
           version: '1.0',
@@ -336,6 +358,28 @@ describe('Metadata', () => {
         const colorId = metadata.deriveColorId(undefined, outPoint);
         assert.strictEqual(colorId.length, 33);
         assert.strictEqual(colorId[0], 0xc3);
+      });
+
+      it('keeps the serialization byte order of the txid', () => {
+        // The outPoint of the tapyrus-core non-reissuable vector; an NFT
+        // differs from it only in the type byte.
+        const metadata = new Metadata({
+          version: '1.0',
+          name: 'NFT Token',
+          symbol: 'NFT',
+          tokenType: 'nft',
+        });
+        const outPoint = {
+          txid: Buffer.from(
+            '485273f6703f038a234400edadb543eb44b4af5372e8b207990beebc386e7954',
+            'hex',
+          ),
+          index: 0,
+        };
+        assert.strictEqual(
+          metadata.deriveColorId(undefined, outPoint).toString('hex'),
+          'c39608951ee23595caa227e7668e39f9d3525a39e9dc30d7391f138576c07be84d',
+        );
       });
 
       it('throws without outPoint', () => {
@@ -660,8 +704,65 @@ describe('Metadata', () => {
         Buffer.from(nftPaymentBase, 'hex'),
       );
       assert.ok(entry.outPoint);
-      assert.deepStrictEqual(entry.outPoint!.txid, Buffer.from(txid, 'hex'));
+      // The registry stores the txid in display order; outPoint.txid is in
+      // serialization order.
+      assert.deepStrictEqual(
+        entry.outPoint!.txid,
+        Buffer.from(txid, 'hex').reverse(),
+      );
       assert.strictEqual(entry.outPoint!.index, 0);
+    });
+
+    // Entries of the tapyrus-token-registry (network 1939510133). The file
+    // name is the colour identifier, `outpoint.txid` is in display order.
+    const registryEntries = [
+      {
+        tokenType: 'nft',
+        colorId:
+          'c3e26287c1d29662bc0b16665737a5e54cbe55aed1cd75d37c00820887f9e0d7eb',
+        txid:
+          'f408f358c2aeb0ba0f29d2e6974607e28b4d259fd8fa540fb32e507812a4c07c',
+      },
+      {
+        tokenType: 'non_reissuable',
+        colorId:
+          'c21c6955f3a6ebf520f49a37b13268af259c52d5e76935973a5bb593b82898bbc6',
+        txid:
+          'ad3f993cc6d6d283fa2bcdc0761dd56b217fa7620bb470c499d82c7fa19f39ac',
+      },
+    ];
+
+    registryEntries.forEach(e => {
+      it(`derives the requested colour id from the outPoint of a ${
+        e.tokenType
+      } entry`, async () => {
+        global.fetch = (async (): Promise<FetchResponse> => {
+          return {
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            text: async (): Promise<string> =>
+              JSON.stringify({
+                payment_base: paymentBase,
+                outpoint: { txid: e.txid, index: 0 },
+                metadata: {
+                  version: '1.0',
+                  name: 'Registry Token',
+                  symbol: 'RT',
+                },
+              }),
+          };
+        }) as any;
+
+        const entry = await Metadata.fetch(e.colorId, NetworkId.TESTNET);
+        assert.strictEqual(entry.metadata.tokenType, e.tokenType);
+        assert.strictEqual(
+          entry.metadata
+            .deriveColorId(undefined, entry.outPoint)
+            .toString('hex'),
+          e.colorId,
+        );
+      });
     });
   });
 });

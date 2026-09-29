@@ -13,8 +13,9 @@ export interface OutPoint {
  * not one output, the issuer mints more of the same token by spending another
  * output locked by that same script.
  *
- * `scriptPubKey` must not itself carry a colour: tapyrus-core derives no colour
- * from a script containing OP_COLOR.
+ * `scriptPubKey` must not itself carry a colour, so a coloured script such as
+ * CP2PKH is refused. tapyrus-core's RPC and its validation of an issuance
+ * likewise refuse a token whose input is another token's script.
  */
 export declare function reissuable(scriptPubKey: Buffer): Buffer;
 /**

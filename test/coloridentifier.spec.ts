@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import { describe, it } from 'mocha';
-import { coloridentifier } from '..';
+import { coloridentifier, payments } from '..';
 
 // The two vectors tapyrus-core asserts in src/test/coloridentifier_tests.cpp
 // (coloridentifier_string_conversion).
@@ -35,6 +35,27 @@ describe('coloridentifier', () => {
         coloridentifier.reissuable('not a buffer' as any);
       }, /Expected Buffer/);
     });
+
+    it('accepts a script whose push data holds the OP_COLOR byte', () => {
+      const script = Buffer.from([0x01, 0xbc]);
+      assert.strictEqual(coloridentifier.reissuable(script).length, 33);
+    });
+
+    it('rejects a coloured script', () => {
+      const colorId = Buffer.from(REISSUABLE_COLOR_ID, 'hex');
+      const hash = Buffer.alloc(20, 0x01);
+      const coloured = [
+        payments.cp2pkh({ hash, colorId }).output!,
+        payments.cp2sh({ hash, colorId }).output!,
+      ];
+      // OP_COLOR is refused wherever it sits in the script.
+      coloured.push(Buffer.from([0x76, 0xbc, 0x51]));
+      coloured.forEach(script => {
+        assert.throws(() => {
+          coloridentifier.reissuable(script);
+        }, /must not be a colored script/);
+      });
+    });
   });
 
   describe('nonReissuable', () => {
@@ -67,8 +88,17 @@ describe('coloridentifier', () => {
   });
 
   describe('nft', () => {
+    it('keeps the serialization byte order of the txid', () => {
+      // Same outPoint as the tapyrus-core non-reissuable vector, whose txid
+      // is not a palindrome, so reversing it would change the result.
+      assert.strictEqual(
+        coloridentifier.nft(OUT_POINT).toString('hex'),
+        'c3' + NON_REISSUABLE_COLOR_ID.slice(2),
+      );
+    });
+
     it('matches the tapyrusrb vector', () => {
-      // tapyrusrb spec/tapyrus/tip0137_spec.rb
+      // tapyrusrb spec/tapyrus/script/color_spec.rb
       assert.strictEqual(
         coloridentifier
           .nft({ txid: Buffer.alloc(32, 0x01), index: 1 })
@@ -88,7 +118,10 @@ describe('coloridentifier', () => {
   });
 
   it('always returns 33 bytes', () => {
-    assert.strictEqual(coloridentifier.reissuable(Buffer.alloc(0)).length, 33);
+    assert.strictEqual(
+      coloridentifier.reissuable(REISSUABLE_SCRIPT).length,
+      33,
+    );
     assert.strictEqual(coloridentifier.nonReissuable(OUT_POINT).length, 33);
     assert.strictEqual(coloridentifier.nft(OUT_POINT).length, 33);
   });

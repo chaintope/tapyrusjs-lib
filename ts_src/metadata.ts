@@ -1,5 +1,5 @@
+import { reverseBuffer } from './bufferutils';
 import * as coloridentifier from './coloridentifier';
-import { OutPoint } from './coloridentifier';
 import * as crypto from './crypto';
 import { Network, NetworkId } from './networks';
 import * as payments from './payments';
@@ -27,12 +27,12 @@ export interface Attribute {
 
 export type TokenType = 'reissuable' | 'non_reissuable' | 'nft';
 
-export { OutPoint };
+export { OutPoint } from './coloridentifier';
 
 export interface RegistryEntry {
   metadata: Metadata;
   paymentBase: Buffer;
-  outPoint?: OutPoint;
+  outPoint?: coloridentifier.OutPoint;
 }
 
 export interface MetadataFields {
@@ -136,7 +136,8 @@ export class Metadata {
     };
     if (data.outpoint) {
       entry.outPoint = {
-        txid: Buffer.from(data.outpoint.txid, 'hex'),
+        // The registry stores the txid in display order.
+        txid: reverseBuffer(Buffer.from(data.outpoint.txid, 'hex')),
         index: data.outpoint.index,
       };
     }
@@ -460,7 +461,10 @@ export class Metadata {
     return address!;
   }
 
-  deriveColorId(publicKey?: Buffer, outPoint?: OutPoint): Buffer {
+  deriveColorId(
+    publicKey?: Buffer,
+    outPoint?: coloridentifier.OutPoint,
+  ): Buffer {
     switch (this.tokenType) {
       case 'reissuable': {
         if (!publicKey) {

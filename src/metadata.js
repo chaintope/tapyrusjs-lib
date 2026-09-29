@@ -34,6 +34,7 @@ var __awaiter =
   };
 Object.defineProperty(exports, '__esModule', { value: true });
 exports.Metadata = void 0;
+const bufferutils_1 = require('./bufferutils');
 const coloridentifier = require('./coloridentifier');
 const crypto = require('./crypto');
 const payments = require('./payments');
@@ -115,7 +116,10 @@ class Metadata {
       };
       if (data.outpoint) {
         entry.outPoint = {
-          txid: Buffer.from(data.outpoint.txid, 'hex'),
+          // The registry stores the txid in display order.
+          txid: (0, bufferutils_1.reverseBuffer)(
+            Buffer.from(data.outpoint.txid, 'hex'),
+          ),
           index: data.outpoint.index,
         };
       }
