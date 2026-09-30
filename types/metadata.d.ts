@@ -1,3 +1,4 @@
+import * as coloridentifier from './coloridentifier';
 import { Network, NetworkId } from './networks';
 export interface Issuer {
     name?: string;
@@ -10,14 +11,11 @@ export interface Attribute {
     display_type?: string;
 }
 export type TokenType = 'reissuable' | 'non_reissuable' | 'nft';
-export interface OutPoint {
-    txid: Buffer;
-    index: number;
-}
+export { OutPoint } from './coloridentifier';
 export interface RegistryEntry {
     metadata: Metadata;
     paymentBase: Buffer;
-    outPoint?: OutPoint;
+    outPoint?: coloridentifier.OutPoint;
 }
 export interface MetadataFields {
     version: string;
@@ -62,5 +60,5 @@ export declare class Metadata {
     commitment(publicKey: Buffer): Buffer;
     p2cPublicKey(publicKey: Buffer): Buffer;
     p2cAddress(publicKey: Buffer, network?: Network): string;
-    deriveColorId(publicKey?: Buffer, outPoint?: OutPoint): Buffer;
+    deriveColorId(publicKey?: Buffer, outPoint?: coloridentifier.OutPoint): Buffer;
 }

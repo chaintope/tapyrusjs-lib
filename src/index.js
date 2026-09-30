@@ -1,12 +1,14 @@
 'use strict';
 Object.defineProperty(exports, '__esModule', { value: true });
-exports.NetworkId = exports.TransactionBuilder = exports.Transaction = exports.opcodes = exports.PsttOutputTypes = exports.PsttInputTypes = exports.PsttGlobalTypes = exports.unregisterScriptSigBuilder = exports.TxModifiable = exports.resolveLocktime = exports.registerScriptSigBuilder = exports.Pstt = exports.Psbt = exports.Metadata = exports.Block = exports.script = exports.schnorr = exports.payments = exports.networks = exports.crypto = exports.bufferutils = exports.bip32 = exports.address = exports.ECPair = void 0;
+exports.NetworkId = exports.TransactionBuilder = exports.Transaction = exports.opcodes = exports.PsttOutputTypes = exports.PsttInputTypes = exports.PsttGlobalTypes = exports.unregisterScriptSigBuilder = exports.TxModifiable = exports.resolveLocktime = exports.registerScriptSigBuilder = exports.Pstt = exports.Psbt = exports.Metadata = exports.Block = exports.script = exports.schnorr = exports.payments = exports.networks = exports.crypto = exports.coloridentifier = exports.bufferutils = exports.bip32 = exports.address = exports.ECPair = void 0;
 const bip32_1 = require('bip32');
 const ecc = require('tiny-secp256k1');
 const address = require('./address');
 exports.address = address;
 const bufferutils = require('./bufferutils');
 exports.bufferutils = bufferutils;
+const coloridentifier = require('./coloridentifier');
+exports.coloridentifier = coloridentifier;
 const crypto = require('./crypto');
 exports.crypto = crypto;
 const ECPair = require('./ecpair');
