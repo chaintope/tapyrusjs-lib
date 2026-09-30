@@ -9,7 +9,7 @@ function getAddress(node: any, network?: any): string {
   return bitcoin.payments.p2pkh({ pubkey: node.publicKey, network }).address!;
 }
 
-describe('bitcoinjs-lib (BIP32)', () => {
+describe('tapyrusjs-lib (BIP32)', () => {
   it('can import a BIP32 dev mode xpriv and export to WIF', () => {
     const xpriv =
       'tprv8ZgxMBicQKsPd7Uf69XL1XwhmjHopUGep8GuEiJDZmbQz6o58LninorQAfcKZWARbtRtfnLcJ5MQ2AtHcQJCCRUcMRvmDUjyEmNUWwx8UbK';
@@ -99,25 +99,6 @@ describe('bitcoinjs-lib (BIP32)', () => {
       getAddress(child1b),
       '12Tyvr1U8A3ped6zwMEU5M8cx3G38sP5Au',
     );
-  });
-
-  it('can create a BIP49, tapyrus dev mode, account 0, external address', () => {
-    const mnemonic =
-      'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
-    const seed = bip39.mnemonicToSeedSync(mnemonic);
-    const root = bip32.fromSeed(seed);
-
-    const path = "m/49'/1'/0'/0/0";
-    const child = root.derivePath(path);
-
-    const { address } = bitcoin.payments.p2sh({
-      redeem: bitcoin.payments.p2wpkh({
-        pubkey: Buffer.from(child.publicKey),
-        network: bitcoin.networks.dev,
-      }),
-      network: bitcoin.networks.dev,
-    });
-    assert.strictEqual(address, '2Mww8dCYPUpKHofjgcXcBCEGmniw9CoaiD2');
   });
 
   it('can use BIP39 to generate BIP32 addresses', () => {

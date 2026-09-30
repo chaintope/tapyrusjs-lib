@@ -1,0 +1,37 @@
+# The node the integration tests run against. Everything here is a published
+# dev mode test value from tapyrus-core/doc/docker_image.md, so the signer key
+# in test/integration/_regtest.ts opens this chain by design.
+services:
+  tapyrusd:
+    image: tapyrus/tapyrusd:v0.7.2
+    environment:
+      # The genesis block for the aggregate public key
+      # 03af80b90d25145da28c583359beb47b21796b2fe1a23c1511e443e7a64dfdb27d.
+      GENESIS_BLOCK_WITH_SIG: '0100000000000000000000000000000000000000000000000000000000000000000000002b5331139c6bc8646bb4e5737c51378133f70b9712b75548cb3c05f9188670e7440d295e7300c5640730c4634402a3e66fb5d921f76b48d8972a484cc0361e66ef74f45e012103af80b90d25145da28c583359beb47b21796b2fe1a23c1511e443e7a64dfdb27d40e05f064662d6b9acf65ae416379d82e11a9b78cdeb3a316d1057cd2780e3727f70a61f901d10acbe349cd11e04aa6b4351e782c44670aefbe138e99a5ce75ace01010000000100000000000000000000000000000000000000000000000000000000000000000000000000ffffffff0100f2052a010000001976a91445d405b9ed450fec89044f9b7a99a4ef6fe2cd3f88ac00000000'
+    volumes:
+      - ./test/integration/tapyrus.conf:/etc/tapyrus/tapyrus.conf:ro
+    # `up --wait` blocks until this passes. tapyrus-core answers RPC with an
+    # error while it is still loading the block index, so a started container
+    # is not yet a usable node.
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'tapyrus-cli',
+          '-conf=/etc/tapyrus/tapyrus.conf',
+          'getblockcount',
+        ]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+    # Bound to the loopback address: the node has no wallet worth protecting,
+    # but its RPC takes generatetoaddress and sendtoaddress without any check
+    # beyond user:pass, and there is no reason to offer that to the network the
+    # development machine happens to sit on.
+    ports:
+      - '127.0.0.1:12382:12381'
+    # No named volume: the chain lives in the container's own filesystem and
+    # `docker compose down` throws it away, so every run starts from the same
+    # height and the same empty wallet. The entrypoint also ignores
+    # GENESIS_BLOCK_WITH_SIG once a genesis file exists, so a kept volume would
+    # survive a change to the genesis block above.

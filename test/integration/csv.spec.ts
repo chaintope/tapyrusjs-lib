@@ -1,11 +1,9 @@
 import * as assert from 'assert';
-import { PsbtInput } from 'bip174/src/lib/interfaces';
 import { before, describe, it } from 'mocha';
 import * as bitcoin from '../..';
 import { regtestUtils } from './_regtest';
 const regtest = regtestUtils.network;
 const bip68 = require('bip68');
-const varuint = require('varuint-bitcoin');
 
 function toOutputScript(address: string): Buffer {
   return bitcoin.address.toOutputScript(address, regtest);
@@ -32,7 +30,7 @@ const dave = bitcoin.ECPair.fromWIF(
   regtest,
 );
 
-describe('bitcoinjs-lib (transactions w/ CSV)', () => {
+describe('tapyrusjs-lib (transactions w/ CSV)', () => {
   // force update MTP
   before(async () => {
     await regtestUtils.mine(11);
@@ -74,7 +72,7 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
   /* tslint:disable-next-line */
   // Ref: https://github.com/bitcoinbook/bitcoinbook/blob/f8b883dcd4e3d1b9adf40fed59b7e898fbd9241f/ch07.asciidoc#complex-script-example
 
-  // Note: bitcoinjs-lib will not offer specific support for problems with
+  // Note: tapyrusjs-lib will not offer specific support for problems with
   //       advanced script usages such as below. Use at your own risk.
   function complexCsvOutput(
     _alice: KeyPair,
@@ -117,7 +115,7 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
 
   // expiry will pass, {Alice's signature} OP_TRUE
   it(
-    'can create (and broadcast via 3PBP) a Transaction where Alice can redeem ' +
+    'can create (and broadcast to a node) a Transaction where Alice can redeem ' +
       'the output after the expiry (in the future) (simple CHECKSEQUENCEVERIFY)',
     async () => {
       // 5 blocks from now
@@ -133,26 +131,40 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
       const unspent = await regtestUtils.faucet(p2sh.address!, 1e5);
       const utx = await regtestUtils.fetch(unspent.txId);
       // for non segwit inputs, you must pass the full transaction buffer
-      const nonWitnessUtxo = Buffer.from(utx.txHex, 'hex');
+      const utxo = Buffer.from(utx.txHex, 'hex');
 
-      // This is an example of using the finalizeInput second parameter to
-      // define how you finalize the inputs, allowing for any type of script.
-      const tx = new bitcoin.Psbt({ network: regtest })
-        .setVersion(2)
+      // The CSV script has no template Pstt's Input Finalizer recognises, so
+      // it is signed with Pstt but finalized by hand, the same way the other
+      // tests below build a Transaction and its scriptSig directly.
+      const pstt = new bitcoin.Pstt({ network: regtest })
         .addInput({
-          hash: unspent.txId,
-          index: unspent.vout,
+          previousTxid: unspent.txId,
+          outputIndex: unspent.vout,
           sequence,
           redeemScript: p2sh.redeem!.output!,
-          nonWitnessUtxo,
+          utxo,
         })
         .addOutput({
           address: regtestUtils.RANDOM_ADDRESS,
-          value: 7e4,
+          amount: 7e4,
         })
-        .signInput(0, alice)
-        .finalizeInput(0, csvGetFinalScripts) // See csvGetFinalScripts below
-        .extractTransaction();
+        .finishConstruction();
+      pstt.signInput(0, alice);
+
+      // {Alice's signature} OP_TRUE
+      const tx = pstt.getTransaction();
+      const redeemScriptSig = bitcoin.payments.p2sh({
+        network: regtest,
+        redeem: {
+          network: regtest,
+          output: p2sh.redeem!.output,
+          input: bitcoin.script.compile([
+            pstt.inputs[0].partialSig[0].signature,
+            bitcoin.opcodes.OP_TRUE,
+          ]),
+        },
+      }).input;
+      tx.setInputScript(0, redeemScriptSig!);
 
       // TODO: test that it failures _prior_ to expiry, unfortunately, race conditions when run concurrently
       // ...
@@ -160,9 +172,8 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
       await regtestUtils.mine(10);
 
       await regtestUtils.broadcast(tx.toHex());
-      const hash = bitcoin.bufferutils
-        .reverseBuffer(tx.getHash())
-        .toString('hex');
+      // an outpoint, and the node's own txid, refer to the hashMalFix
+      const hash = tx.getId();
       await regtestUtils.verify({
         txId: hash,
         address: regtestUtils.RANDOM_ADDRESS,
@@ -174,7 +185,7 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
 
   // expiry in the future, {Alice's signature} OP_TRUE
   it(
-    'can create (but fail to broadcast via 3PBP) a Transaction where Alice ' +
+    'can create (but fail to broadcast to a node) a Transaction where Alice ' +
       'attempts to redeem before the expiry (simple CHECKSEQUENCEVERIFY)',
     async () => {
       // two hours after confirmation
@@ -190,7 +201,7 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
       const unspent = await regtestUtils.faucet(p2sh.address!, 2e4);
 
       const tx = new bitcoin.Transaction();
-      tx.version = 2;
+      tx.version = 1; // Tapyrus calls this nFeatures and only accepts 1.
       tx.addInput(idToHash(unspent.txId), unspent.vout, sequence);
       tx.addOutput(toOutputScript(regtestUtils.RANDOM_ADDRESS), 1e4);
 
@@ -217,17 +228,16 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
       }).input;
       tx.setInputScript(0, redeemScriptSig!);
 
-      await regtestUtils.broadcast(tx.toHex()).catch(err => {
-        assert.throws(() => {
-          if (err) throw err;
-        }, /Error: non-BIP68-final \(code 64\)/);
-      });
+      await assert.rejects(
+        regtestUtils.broadcast(tx.toHex()),
+        /sendrawtransaction failed: non-BIP68-final \(code 64\)/,
+      );
     },
   );
 
   // Check first combination of complex CSV, 2 of 3
   it(
-    'can create (and broadcast via 3PBP) a Transaction where Bob and Charles ' +
+    'can create (and broadcast to a node) a Transaction where Bob and Charles ' +
       'can send (complex CHECKSEQUENCEVERIFY)',
     async () => {
       // 2 blocks from now
@@ -252,7 +262,7 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
       const unspent = await regtestUtils.faucet(p2sh.address!, 1e5);
 
       const tx = new bitcoin.Transaction();
-      tx.version = 2;
+      tx.version = 1; // Tapyrus calls this nFeatures and only accepts 1.
       tx.addInput(idToHash(unspent.txId), unspent.vout);
       tx.addOutput(toOutputScript(regtestUtils.RANDOM_ADDRESS), 7e4);
 
@@ -282,9 +292,8 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
       tx.setInputScript(0, redeemScriptSig!);
 
       await regtestUtils.broadcast(tx.toHex());
-      const hash = bitcoin.bufferutils
-        .reverseBuffer(tx.getHash())
-        .toString('hex');
+      // an outpoint, and the node's own txid, refer to the hashMalFix
+      const hash = tx.getId();
       await regtestUtils.verify({
         txId: hash,
         address: regtestUtils.RANDOM_ADDRESS,
@@ -296,7 +305,7 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
 
   // Check first combination of complex CSV, mediator + 1 of 3 after 2 blocks
   it(
-    'can create (and broadcast via 3PBP) a Transaction where Alice (mediator) ' +
+    'can create (and broadcast to a node) a Transaction where Alice (mediator) ' +
       'and Bob can send after 2 blocks (complex CHECKSEQUENCEVERIFY)',
     async () => {
       // 2 blocks from now
@@ -321,7 +330,7 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
       const unspent = await regtestUtils.faucet(p2sh.address!, 1e5);
 
       const tx = new bitcoin.Transaction();
-      tx.version = 2;
+      tx.version = 1; // Tapyrus calls this nFeatures and only accepts 1.
       tx.addInput(idToHash(unspent.txId), unspent.vout, sequence1); // Set sequence1 for input
       tx.addOutput(toOutputScript(regtestUtils.RANDOM_ADDRESS), 7e4);
 
@@ -354,9 +363,8 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
       await regtestUtils.mine(2);
 
       await regtestUtils.broadcast(tx.toHex());
-      const hash = bitcoin.bufferutils
-        .reverseBuffer(tx.getHash())
-        .toString('hex');
+      // an outpoint, and the node's own txid, refer to the hashMalFix
+      const hash = tx.getId();
       await regtestUtils.verify({
         txId: hash,
         address: regtestUtils.RANDOM_ADDRESS,
@@ -368,7 +376,7 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
 
   // Check first combination of complex CSV, mediator after 5 blocks
   it(
-    'can create (and broadcast via 3PBP) a Transaction where Alice (mediator) ' +
+    'can create (and broadcast to a node) a Transaction where Alice (mediator) ' +
       'can send after 5 blocks (complex CHECKSEQUENCEVERIFY)',
     async () => {
       // 2 blocks from now
@@ -393,7 +401,7 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
       const unspent = await regtestUtils.faucet(p2sh.address!, 1e5);
 
       const tx = new bitcoin.Transaction();
-      tx.version = 2;
+      tx.version = 1; // Tapyrus calls this nFeatures and only accepts 1.
       tx.addInput(idToHash(unspent.txId), unspent.vout, sequence2); // Set sequence2 for input
       tx.addOutput(toOutputScript(regtestUtils.RANDOM_ADDRESS), 7e4);
 
@@ -423,9 +431,8 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
       await regtestUtils.mine(5);
 
       await regtestUtils.broadcast(tx.toHex());
-      const hash = bitcoin.bufferutils
-        .reverseBuffer(tx.getHash())
-        .toString('hex');
+      // an outpoint, and the node's own txid, refer to the hashMalFix
+      const hash = tx.getId();
       await regtestUtils.verify({
         txId: hash,
         address: regtestUtils.RANDOM_ADDRESS,
@@ -435,88 +442,3 @@ describe('bitcoinjs-lib (transactions w/ CSV)', () => {
     },
   );
 });
-
-// This function is used to finalize a CSV transaction using PSBT.
-// See first test above.
-function csvGetFinalScripts(
-  inputIndex: number,
-  input: PsbtInput,
-  script: Buffer,
-  isSegwit: boolean,
-  isP2SH: boolean,
-  isP2WSH: boolean,
-): {
-  finalScriptSig: Buffer | undefined;
-  finalScriptWitness: Buffer | undefined;
-} {
-  // Step 1: Check to make sure the meaningful script matches what you expect.
-  const decompiled = bitcoin.script.decompile(script);
-  // Checking if first OP is OP_IF... should do better check in production!
-  // You may even want to check the public keys in the script against a
-  // whitelist depending on the circumstances!!!
-  // You also want to check the contents of the input to see if you have enough
-  // info to actually construct the scriptSig and Witnesses.
-  if (!decompiled || decompiled[0] !== bitcoin.opcodes.OP_IF) {
-    throw new Error(`Can not finalize input #${inputIndex}`);
-  }
-
-  // Step 2: Create final scripts
-  let payment: bitcoin.Payment = {
-    network: regtest,
-    output: script,
-    // This logic should be more strict and make sure the pubkeys in the
-    // meaningful script are the ones signing in the PSBT etc.
-    input: bitcoin.script.compile([
-      input.partialSig![0].signature,
-      bitcoin.opcodes.OP_TRUE,
-    ]),
-  };
-  if (isP2WSH && isSegwit)
-    payment = bitcoin.payments.p2wsh({
-      network: regtest,
-      redeem: payment,
-    });
-  if (isP2SH)
-    payment = bitcoin.payments.p2sh({
-      network: regtest,
-      redeem: payment,
-    });
-
-  function witnessStackToScriptWitness(witness: Buffer[]): Buffer {
-    let buffer = Buffer.allocUnsafe(0);
-
-    function writeSlice(slice: Buffer): void {
-      buffer = Buffer.concat([buffer, Buffer.from(slice)]);
-    }
-
-    function writeVarInt(i: number): void {
-      const currentLen = buffer.length;
-      const varintLen = varuint.encodingLength(i);
-
-      buffer = Buffer.concat([buffer, Buffer.allocUnsafe(varintLen)]);
-      varuint.encode(i, buffer, currentLen);
-    }
-
-    function writeVarSlice(slice: Buffer): void {
-      writeVarInt(slice.length);
-      writeSlice(slice);
-    }
-
-    function writeVector(vector: Buffer[]): void {
-      writeVarInt(vector.length);
-      vector.forEach(writeVarSlice);
-    }
-
-    writeVector(witness);
-
-    return buffer;
-  }
-
-  return {
-    finalScriptSig: payment.input,
-    finalScriptWitness:
-      payment.witness && payment.witness.length > 0
-        ? witnessStackToScriptWitness(payment.witness)
-        : undefined,
-  };
-}

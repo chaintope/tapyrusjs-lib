@@ -1,0 +1,32 @@
+name: Run Integration Tests
+
+# A separate workflow from ci.yml, so a node that fails to start shows up as its
+# own check and leaves the unit test result alone.
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+      - run: npm ci
+      - name: Start a Tapyrus node
+        run: docker compose -f docker-compose.integration.yml up -d --wait --wait-timeout 60
+      - name: Run integration test
+        run: npm run integration
+      - name: Show the node log
+        if: failure()
+        run: docker compose -f docker-compose.integration.yml logs
+      - name: Stop the node
+        if: always()
+        run: docker compose -f docker-compose.integration.yml down

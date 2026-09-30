@@ -11,41 +11,40 @@ async function buildAndSign(
   depends: any,
   prevOutput: any,
   redeemScript: any,
-  witnessScript: any,
-): Promise<null> {
+): Promise<string> {
   const unspent = await regtestUtils.faucetComplex(prevOutput, 5e4);
   const utx = await regtestUtils.fetch(unspent.txId);
 
-  const psbt = new bitcoin.Psbt({ network: NETWORK })
+  const pstt = new bitcoin.Pstt({ network: NETWORK })
     .addInput({
-      hash: unspent.txId,
-      index: unspent.vout,
-      nonWitnessUtxo: Buffer.from(utx.txHex, 'hex'),
+      previousTxid: unspent.txId,
+      outputIndex: unspent.vout,
+      utxo: Buffer.from(utx.txHex, 'hex'),
       ...(redeemScript ? { redeemScript } : {}),
-      ...(witnessScript ? { witnessScript } : {}),
     })
     .addOutput({
       address: regtestUtils.RANDOM_ADDRESS,
-      value: 2e4,
-    });
+      amount: 2e4,
+    })
+    .finishConstruction();
 
   if (depends.signatures) {
     keyPairs.forEach(keyPair => {
-      psbt.signInput(0, keyPair);
+      pstt.signInput(0, keyPair);
     });
   } else if (depends.signature) {
-    psbt.signInput(0, keyPairs[0]);
+    pstt.signInput(0, keyPairs[0]);
   }
 
   return regtestUtils.broadcast(
-    psbt
+    pstt
       .finalizeAllInputs()
       .extractTransaction()
       .toHex(),
   );
 }
 
-['p2ms', 'p2pk', 'p2pkh', 'p2wpkh'].forEach(k => {
+['p2ms', 'p2pk', 'p2pkh'].forEach(k => {
   const fixtures = require('../fixtures/' + k);
   const { depends } = fixtures.dynamic;
   const fn: any = (bitcoin.payments as any)[k];
@@ -58,10 +57,10 @@ async function buildAndSign(
   const { output } = fn(base);
   if (!output) throw new TypeError('Missing output');
 
-  describe('bitcoinjs-lib (payments - ' + k + ')', () => {
+  describe('tapyrusjs-lib (payments - ' + k + ')', () => {
     it('can broadcast as an output, and be spent as an input', async () => {
       Object.assign(depends, { prevOutScriptType: k });
-      await buildAndSign(depends, output, undefined, undefined);
+      await buildAndSign(depends, output, undefined);
     });
 
     it(
@@ -74,58 +73,7 @@ async function buildAndSign(
           network: NETWORK,
         });
         Object.assign(depends, { prevOutScriptType: 'p2sh-' + k });
-        await buildAndSign(
-          depends,
-          p2sh.output,
-          p2sh.redeem!.output,
-          undefined,
-        );
-      },
-    );
-
-    // NOTE: P2WPKH cannot be wrapped in P2WSH, consensus fail
-    if (k === 'p2wpkh') return;
-
-    it(
-      'can (as P2WSH(' +
-        k +
-        ')) broadcast as an output, and be spent as an input',
-      async () => {
-        const p2wsh = bitcoin.payments.p2wsh({
-          redeem: { output },
-          network: NETWORK,
-        });
-        Object.assign(depends, { prevOutScriptType: 'p2wsh-' + k });
-        await buildAndSign(
-          depends,
-          p2wsh.output,
-          undefined,
-          p2wsh.redeem!.output,
-        );
-      },
-    );
-
-    it(
-      'can (as P2SH(P2WSH(' +
-        k +
-        '))) broadcast as an output, and be spent as an input',
-      async () => {
-        const p2wsh = bitcoin.payments.p2wsh({
-          redeem: { output },
-          network: NETWORK,
-        });
-        const p2sh = bitcoin.payments.p2sh({
-          redeem: { output: p2wsh.output },
-          network: NETWORK,
-        });
-
-        Object.assign(depends, { prevOutScriptType: 'p2sh-p2wsh-' + k });
-        await buildAndSign(
-          depends,
-          p2sh.output,
-          p2sh.redeem!.output,
-          p2wsh.redeem!.output,
-        );
+        await buildAndSign(depends, p2sh.output, p2sh.redeem!.output);
       },
     );
   });
